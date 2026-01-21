@@ -22,29 +22,33 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useMemo } = React;
 
         // --- Firebase Modules ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Firebase Configuration ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
-                authDomain: "bandschedule-98f2c.firebaseapp.com",
-                projectId: "bandschedule-98f2c",
-                storageBucket: "bandschedule-98f2c.firebasestorage.app",
-                messagingSenderId: "1017107663135",
-                appId: "1:1017107663135:web:54771b17cd463b32af482a"
-            };
+        // --- 【最重要】Firebaseの設定 ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
+            authDomain: "bandschedule-98f2c.firebaseapp.com",
+            projectId: "bandschedule-98f2c",
+            storageBucket: "bandschedule-98f2c.firebasestorage.app",
+            messagingSenderId: "1017107663135",
+            appId: "1:1017107663135:web:54771b17cd463b32af482a"
+        };
         
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-band-sync';
+        let app, auth, db;
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Firebaseの初期化に失敗しました。設定を確認してください。", e);
+        }
+
+        const appId = "band-sync-production-v1";
 
         // --- Constants ---
         const START_HOUR = 8;
@@ -79,9 +83,7 @@
             return dates;
         };
 
-        const generateId = () => {
-            return Math.random().toString(36).substring(2, 11);
-        };
+        const generateId = () => Math.random().toString(36).substring(2, 11);
 
         const IconCopy = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
         const IconExternal = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>;
@@ -101,16 +103,13 @@
             // Auth Initialization
             useEffect(() => {
                 const initAuth = async () => {
+                    if (!auth) return;
                     try {
                         setIsAuthLoading(true);
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
+                        await signInAnonymously(auth);
                     } catch (e) {
                         console.error("Auth Error:", e);
-                        setError(`認証エラー: ${e.message}`);
+                        setError(`認証エラー: Firebaseコンソールで匿名認証を有効にしてください。`);
                     } finally {
                         setIsAuthLoading(false);
                     }
@@ -122,17 +121,18 @@
 
             // Data Fetching
             useEffect(() => {
-                if (!user || !sessionId) return;
+                if (!user || !sessionId || !db) return;
 
                 const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
                 const unsubSession = onSnapshot(sessionRef, (snap) => {
                     if (snap.exists()) {
                         setSessionData(snap.data());
                     } else {
-                        setError("セッションが見つかりません。");
+                        setError("セッションが見つかりません。URLが正しいか確認してください。");
                     }
                 }, (err) => {
-                    setError(`データの読み取り権限がありません。`);
+                    console.error("Session fetch error:", err);
+                    setError(`データの読み取り権限がありません。Firestoreのルールを確認してください。`);
                 });
 
                 const availCol = collection(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability');
@@ -145,13 +145,13 @@
                         setUserName(data[user.uid].name);
                         setIsJoined(true);
                     }
-                }, (err) => console.error("Availability Error:", err));
+                }, (err) => console.error("Availability fetch error:", err));
 
                 return () => { unsubSession(); unsubAvail(); };
             }, [user, sessionId]);
 
             const handleCreate = async (bandName, count) => {
-                if (!user) return;
+                if (!user || !db) return;
                 const id = generateId();
                 const data = {
                     id, 
@@ -165,28 +165,26 @@
                 try {
                     const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id);
                     await setDoc(sessionRef, data);
-                    // sessionIdをセットすることでカレンダー画面に切り替わる
                     setSessionId(id);
-                    // 注: pushStateはエラーの原因となるため実行しない
                 } catch (e) {
                     console.error("Firestore Save Error:", e);
-                    setError(`作成に失敗しました: ${e.message}`);
+                    setError(`作成に失敗しました。APIキーが正しいか、Firestoreのルールが開かれているか確認してください。`);
                 }
             };
 
             const handleJoin = async () => {
-                if (!userName.trim() || !user || !sessionId) return;
+                if (!userName.trim() || !user || !sessionId || !db) return;
                 try {
                     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability', user.uid);
                     await setDoc(ref, { name: userName, slots: availabilities[user.uid]?.slots || [] }, { merge: true });
                     setIsJoined(true);
                 } catch (e) {
-                    setError(`参加に失敗しました: ${e.message}`);
+                    setError(`参加に失敗しました。`);
                 }
             };
 
             const handleSlotClick = async (dateStr, slotIdx) => {
-                if (!isJoined || !user || !sessionId) return;
+                if (!isJoined || !user || !sessionId || !db) return;
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability', user.uid);
                 const myCurrentSlots = availabilities[user.uid]?.slots || [];
                 const key = `${dateStr}:${slotIdx}`;
@@ -251,12 +249,11 @@
                             </div>
                         </div>
                         <button onClick={() => {
-                            // 安全なリンク生成: プレビューURLでも正しく生成できるようにする
                             const url = window.location.href.split('?')[0].split('#')[0] + '?s=' + sessionId;
                             const t = document.createElement('textarea');
                             t.value = url; document.body.appendChild(t); t.select(); 
                             document.execCommand('copy'); document.body.removeChild(t);
-                            alert('共有用URLをコピーしました！');
+                            alert('共有用URLをコピーしました！メンバーに送ってください。');
                         }} className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black hover:bg-indigo-100 transition-colors">
                             <IconCopy /> URLコピー
                         </button>
@@ -298,10 +295,14 @@
                                                 const isSelStart = selectionStart?.dateStr === ds && selectionStart?.slotIdx === sIdx;
                                                 
                                                 let cellBg = 'transparent';
-                                                if (isFull) cellBg = '#ef4444'; 
-                                                else if (count > 0) {
-                                                    const intensity = (count / sessionData.memberCount) * 0.8;
-                                                    cellBg = `rgba(79, 70, 229, ${0.1 + intensity})`;
+                                                if (isFull) {
+                                                    cellBg = '#ef4444'; // 全員揃ったら鮮やかな赤
+                                                } else if (count > 0) {
+                                                    // 人数による色の濃淡をよりはっきりさせるための計算
+                                                    // 1人目からしっかり色を出し、人数が増えるごとの差分を大きくします
+                                                    const ratio = count / sessionData.memberCount;
+                                                    const opacity = 0.2 + (ratio * 0.7); 
+                                                    cellBg = `rgba(67, 56, 202, ${opacity})`; // indigo-700ベースで不透明度を調整
                                                 }
 
                                                 return (
@@ -416,7 +417,7 @@
                     <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full">
                         <h1 className="text-xl font-black text-rose-600 mb-4 text-center">エラーが発生しました</h1>
                         <p className="text-sm text-slate-600 text-center mb-6 leading-relaxed">{message}</p>
-                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold">再読み込みしてリトライ</button>
+                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold">再読み込み</button>
                     </div>
                 </div>
             );
@@ -426,5 +427,4 @@
         root.render(<App />);
     </script>
 </body>
-
 </html>
