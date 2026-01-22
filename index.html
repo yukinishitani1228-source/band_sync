@@ -16,24 +16,30 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .slot-transition { transition: background-color 0.15s ease, transform 0.1s ease; }
-        @keyframes slideUp {
-            from { transform: translateY(100%); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
+        
+        /* アイコンポップアップのアニメーション */
+        @keyframes popIn {
+            0% { transform: scale(0.8) translateY(10px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
         }
-        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        .animate-pop-in { animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        /* 長押し中の視覚フィードバック */
+        .pressing { transform: scale(0.95); filter: brightness(0.9); }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
         // --- Firebase Modules ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
             getAuth, 
             signInAnonymously, 
+            signInWithCustomToken,
             onAuthStateChanged, 
             GoogleAuthProvider, 
             signInWithPopup,
@@ -62,9 +68,9 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appIdPrefix = 'band-sync-prod-v11'; 
+        const appIdPrefix = 'band-sync-prod-v12'; 
 
-        // --- 【重要】定数は必ずここで定義する（二重定義禁止） ---
+        // --- Global Constants ---
         const START_HOUR = 8;
         const END_HOUR = 23;
         const SLOTS_PER_HOUR = 2; 
@@ -96,9 +102,8 @@
         const IconGoogle = () => <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>;
         const IconCopy = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
         const IconLogout = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
-        const IconUsers = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 
-        // --- Components ---
+        // --- Sub-Components ---
 
         function AuthGate({ onGoogle, onAnon }) {
             return (
@@ -139,12 +144,12 @@
                                 {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-sm" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
                                 <div>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">{isAnon ? "GUEST" : "LOGGED IN"}</p>
-                                    <p className="font-black text-sm truncate w-32">{user.displayName || "ゲストユーザー"}</p>
+                                    <p className="font-black text-sm truncate w-32 text-slate-900">{user.displayName || "ゲストユーザー"}</p>
                                 </div>
                             </div>
                             <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2"><IconLogout /></button>
                         </div>
-                        <div className="space-y-8">
+                        <div className="space-y-8 text-slate-900">
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">プロジェクト名 / バンド名</label>
                                 <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: BABA-LIVE" value={name} onChange={e => setName(e.target.value)} />
@@ -201,8 +206,8 @@
         function ErrorView({ message, onRetry }) {
             return (
                 <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-center text-slate-900">
-                    <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full">
-                        <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic text-center">ERROR</h1>
+                    <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full text-center">
+                        <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic">ERROR</h1>
                         <p className="text-sm text-slate-600 mb-6 leading-relaxed text-center whitespace-pre-wrap">{message}</p>
                         <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-all">リトライ</button>
                     </div>
@@ -224,7 +229,11 @@
             const [isJoining, setIsJoining] = useState(false);
             const [viewStartDate, setViewStartDate] = useState(new Date());
             const [selectionStart, setSelectionStart] = useState(null);
-            const [activeDetailSlot, setActiveDetailSlot] = useState(null);
+            
+            // --- ポップアップ表示用のステート ---
+            const [peekSlot, setPeekSlot] = useState(null);
+            const longPressTimer = useRef(null);
+            const isLongPressing = useRef(false);
 
             useEffect(() => {
                 const unsub = onAuthStateChanged(auth, (u) => {
@@ -240,10 +249,10 @@
                 const sessionRef = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', sessionId);
                 const unsubSession = onSnapshot(sessionRef, (snap) => {
                     if (snap.exists()) setSessionData(snap.data());
-                    else setError("セッションが見つかりません。リンクが正しいか確認してください。");
+                    else setError("セッションが見つかりません。");
                 }, (err) => {
                     console.error(err);
-                    setError("データの読み取りに失敗しました。Edgeの追跡防止機能によりブロックされている可能性があります。");
+                    setError("データの読み取りに失敗しました。");
                 });
 
                 const availCol = collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability');
@@ -309,14 +318,40 @@
                 } catch (e) { setError(`参加失敗: ${e.message}`); } finally { setIsJoining(false); }
             };
 
+            // --- 長押し・クリック処理の統合 ---
+            const onSlotPointerDown = (key, ds, sIdx) => {
+                isLongPressing.current = false;
+                longPressTimer.current = setTimeout(() => {
+                    isLongPressing.current = true;
+                    setPeekSlot(key);
+                }, 500); // 0.5秒で長押し判定
+            };
+
+            const onSlotPointerUp = (key, ds, sIdx) => {
+                clearTimeout(longPressTimer.current);
+                if (isLongPressing.current) {
+                    // 長押し終了時はポップアップを消す
+                    setPeekSlot(null);
+                } else {
+                    // 単なるクリック時
+                    handleSlotClick(ds, sIdx);
+                }
+                isLongPressing.current = false;
+            };
+
+            const onSlotPointerLeave = () => {
+                clearTimeout(longPressTimer.current);
+                setPeekSlot(null);
+                isLongPressing.current = false;
+            };
+
             const handleSlotClick = async (dateStr, slotIdx) => {
                 if (!isJoined || !user || !sessionId) return;
-                const key = `${dateStr}:${slotIdx}`;
-                setActiveDetailSlot(key);
                 const docId = `${sessionId}_${user.uid}`;
                 const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
                 const myData = allAvailability.find(a => a.uid === user.uid);
                 const myCurrentSlots = myData?.slots || [];
+                const key = `${dateStr}:${slotIdx}`;
                 const amISelected = myCurrentSlots.includes(key);
 
                 let nextSlots;
@@ -364,7 +399,6 @@
             );
 
             const weekDates = getWeekDates(viewStartDate);
-            const activeParticipants = activeDetailSlot ? (slotDetails[activeDetailSlot] || []) : [];
 
             return (
                 <div className="min-h-screen bg-white flex flex-col font-sans max-h-screen overflow-hidden relative text-slate-900">
@@ -409,7 +443,7 @@
 
                         <div className="flex w-full relative">
                             <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black">
-                                {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => (
+                                {Array.from({ length: 23 - 8 + 1 }).map((_, h) => (
                                     <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100">{START_HOUR + h}:00</div>
                                 ))}
                             </div>
@@ -417,14 +451,14 @@
                                 {weekDates.map((d, dayIdx) => {
                                     const ds = formatDate(d);
                                     return (
-                                        <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col">
+                                        <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col relative">
                                             {Array.from({ length: TOTAL_SLOTS }).map((_, sIdx) => {
                                                 const key = `${ds}:${sIdx}`;
                                                 const participants = slotDetails[key] || [];
                                                 const count = participants.length;
                                                 const isMe = allAvailability.find(a => a.uid === user.uid)?.slots?.includes(key);
                                                 const isFull = count >= sessionData.memberCount;
-                                                const isActive = activeDetailSlot === key;
+                                                const isPeeking = peekSlot === key;
                                                 
                                                 let cellBg = 'transparent';
                                                 if (isFull) cellBg = '#ef4444'; 
@@ -435,13 +469,34 @@
                                                 }
 
                                                 return (
-                                                    <div key={sIdx} onClick={() => handleSlotClick(ds, sIdx)}
+                                                    <div 
+                                                        key={sIdx} 
+                                                        onPointerDown={() => onSlotPointerDown(key, ds, sIdx)}
+                                                        onPointerUp={() => onSlotPointerUp(key, ds, sIdx)}
+                                                        onPointerLeave={onSlotPointerLeave}
                                                         style={{ backgroundColor: cellBg }}
-                                                        className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition hover:opacity-80 
+                                                        className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition select-none 
                                                             ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''}
-                                                            ${isActive ? 'ring-2 ring-indigo-500 z-10' : ''}`}>
+                                                            ${isPeeking ? 'z-50' : ''}
+                                                        `}
+                                                    >
                                                         {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
                                                         {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
+                                                        
+                                                        {/* --- 長押し時のみ表示されるアイコンリスト --- */}
+                                                        {isPeeking && participants.length > 0 && (
+                                                            <div className="absolute top-1/2 left-full ml-2 -translate-y-1/2 bg-white/95 backdrop-blur shadow-2xl rounded-2xl p-2 border border-slate-100 flex gap-1 z-[100] animate-pop-in pointer-events-none">
+                                                                {participants.map((p) => (
+                                                                    <div key={p.uid} className="w-6 h-6 rounded-full border border-white shadow-sm overflow-hidden flex-shrink-0 bg-indigo-50 flex items-center justify-center">
+                                                                        {p.photoURL ? (
+                                                                            <img src={p.photoURL} className="w-full h-full object-cover" />
+                                                                        ) : (
+                                                                            <span className="text-[10px] font-black text-indigo-600 uppercase">{p.name.charAt(0)}</span>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -451,27 +506,6 @@
                             </div>
                         </div>
                     </div>
-
-                    {activeDetailSlot && (
-                        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/95 backdrop-blur-md shadow-2xl rounded-3xl p-4 border border-slate-200 z-50 animate-slide-up text-left">
-                            <div className="flex justify-between items-center mb-3 text-slate-900">
-                                <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
-                                    <IconUsers /> {activeDetailSlot.split(':')[0].replace(/-/g, '/')} {START_HOUR + Math.floor(activeDetailSlot.split(':')[1] / SLOTS_PER_HOUR)}:{activeDetailSlot.split(':')[1] % SLOTS_PER_HOUR === 0 ? '00' : '30'}
-                                </div>
-                                <button onClick={() => setActiveDetailSlot(null)} className="text-slate-400 p-1">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar text-left">
-                                {activeParticipants.length > 0 ? activeParticipants.map((p) => (
-                                    <div key={p.uid} className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
-                                        {p.photoURL ? <img src={p.photoURL} className="w-4 h-4 rounded-full shadow-sm" /> : <div className="w-4 h-4 bg-indigo-100 rounded-full flex items-center justify-center text-[8px] font-black text-indigo-600 uppercase">{p.name?.charAt(0) || '?'}</div>}
-                                        <span className="text-[10px] font-bold text-slate-700">{p.name}</span>
-                                    </div>
-                                )) : <div className="text-center py-2 text-[10px] font-bold text-slate-400 w-full italic">まだ誰も選んでいません</div>}
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         }
