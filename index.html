@@ -51,27 +51,25 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Configuration ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
-                authDomain: "bandschedule-98f2c.firebaseapp.com",
-                projectId: "bandschedule-98f2c",
-                storageBucket: "bandschedule-98f2c.firebasestorage.app",
-                messagingSenderId: "1017107663135",
-                appId: "1:1017107663135:web:54771b17cd463b32af482a"
-            };
+        const firebaseConfig = {
+            apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
+            authDomain: "bandschedule-98f2c.firebaseapp.com",
+            projectId: "bandschedule-98f2c",
+            storageBucket: "bandschedule-98f2c.firebasestorage.app",
+            messagingSenderId: "1017107663135",
+            appId: "1:1017107663135:web:54771b17cd463b32af482a"
+        };
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'band-sync-production-v10';
+        const appIdPrefix = 'band-sync-v10'; // 内部ID固定化
 
-        // --- Global Constants ---
+        // --- Global Constants (定義を先頭に集中させてReferenceErrorを回避) ---
         const START_HOUR = 8;
         const END_HOUR = 23;
-        const SLOTS_PER_HOUR = 2; // 30分単位
-        const TOTAL_SLOTS = (END_HOUR - START_HOUR + 1) * SLOTS_PER_HOUR; // 32スロット
+        const SLOTS_PER_HOUR = 2; 
+        const TOTAL_SLOTS = (END_HOUR - START_HOUR + 1) * SLOTS_PER_HOUR; 
         const DAYS_OF_WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
         // --- Global Icons ---
@@ -101,310 +99,13 @@
 
         const generateId = () => Math.random().toString(36).substring(2, 11);
 
-        // --- Main Component ---
-        function App() {
-            const [user, setUser] = useState(null);
-            const [isAuthLoading, setIsAuthLoading] = useState(true);
-            const [error, setError] = useState(null);
-            const [sessionId, setSessionId] = useState(new URLSearchParams(window.location.search).get('s') || null);
-            const [sessionData, setSessionData] = useState(null);
-            const [allAvailability, setAllAvailability] = useState([]);
-            const [userName, setUserName] = useState('');
-            const [isJoined, setIsJoined] = useState(false);
-            const [isJoining, setIsJoining] = useState(false);
-            const [viewStartDate, setViewStartDate] = useState(new Date());
-            const [selectionStart, setSelectionStart] = useState(null);
-            const [activeDetailSlot, setActiveDetailSlot] = useState(null);
-
-            // 認証状態の監視
-            useEffect(() => {
-                const unsub = onAuthStateChanged(auth, (u) => {
-                    setUser(u);
-                    setIsAuthLoading(false);
-                    if (u && !userName) {
-                        setUserName(u.displayName || '');
-                    }
-                });
-                return () => unsub();
-            }, [userName]);
-
-            // データ購読 (Rule 1, 2)
-            useEffect(() => {
-                if (!user || !sessionId) return;
-
-                const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
-                const unsubSession = onSnapshot(sessionRef, (snap) => {
-                    if (snap.exists()) setSessionData(snap.data());
-                    else setError("セッションが見つかりませんでした。リンクが正しいか確認してください。");
-                }, (err) => setError("データの読み取りに失敗しました。"));
-
-                const availCol = collection(db, 'artifacts', appId, 'public', 'data', 'availability');
-                const unsubAvail = onSnapshot(availCol, (snap) => {
-                    const docs = [];
-                    snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
-                    
-                    const filtered = docs.filter(item => item.sessionId === sessionId);
-                    setAllAvailability(filtered);
-                    
-                    const me = filtered.find(item => item.uid === user.uid);
-                    if (me) {
-                        setIsJoined(true);
-                        setUserName(me.name);
-                    }
-                });
-
-                return () => { unsubSession(); unsubAvail(); };
-            }, [user, sessionId]);
-
-            const loginWithGoogle = async () => {
-                const provider = new GoogleAuthProvider();
-                try {
-                    setError(null);
-                    const result = await signInWithPopup(auth, provider);
-                    if (result.user) setUserName(result.user.displayName || '');
-                } catch (e) {
-                    setError(`Googleログイン失敗: ${e.message}`);
-                }
-            };
-
-            const loginAnonymously = async () => {
-                try { 
-                    setError(null);
-                    await signInAnonymously(auth); 
-                } catch (e) { 
-                    setError("ログインに失敗しました。"); 
-                }
-            };
-
-            const handleLogout = async () => {
-                if (confirm("ログアウトしますか？")) {
-                    await signOut(auth);
-                    window.location.reload();
-                }
-            };
-
-            const handleCreate = async (bandName, count) => {
-                if (!user) return;
-                const id = generateId();
-                const data = {
-                    id, bandName, memberCount: parseInt(count),
-                    startDate: formatDate(new Date()), createdAt: Date.now(), creatorUid: user.uid
-                };
-                try {
-                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id), data);
-                    setSessionId(id);
-                } catch (e) { setError(`作成失敗: ${e.message}`); }
-            };
-
-            const handleJoin = async () => {
-                if (!userName || !userName.trim() || !user || !sessionId) return;
-                setIsJoining(true);
-                try {
-                    const docId = `${sessionId}_${user.uid}`;
-                    const ref = doc(db, 'artifacts', appId, 'public', 'data', 'availability', docId);
-                    const myExistingData = allAvailability.find(a => a.uid === user.uid);
-                    
-                    await setDoc(ref, { 
-                        sessionId,
-                        uid: user.uid,
-                        name: userName.trim(), 
-                        slots: myExistingData?.slots || [],
-                        photoURL: user.photoURL || null,
-                        lastUpdated: Date.now()
-                    }, { merge: true });
-                    
-                    setIsJoined(true);
-                } catch (e) { 
-                    console.error(e);
-                    setError(`参加に失敗しました。Firestoreの書き込み権限を確認してください。`); 
-                } finally {
-                    setIsJoining(false);
-                }
-            };
-
-            const handleSlotClick = async (dateStr, slotIdx) => {
-                if (!isJoined || !user || !sessionId) return;
-                const key = `${dateStr}:${slotIdx}`;
-                setActiveDetailSlot(key);
-
-                const docId = `${sessionId}_${user.uid}`;
-                const ref = doc(db, 'artifacts', appId, 'public', 'data', 'availability', docId);
-                const myData = allAvailability.find(a => a.uid === user.uid);
-                const myCurrentSlots = myData?.slots || [];
-                const amISelected = myCurrentSlots.includes(key);
-
-                let nextSlots;
-                if (!selectionStart || selectionStart.dateStr !== dateStr) {
-                    nextSlots = amISelected ? myCurrentSlots.filter(s => s !== key) : [...myCurrentSlots, key];
-                    setSelectionStart({ dateStr, slotIdx, wasSelected: amISelected });
-                } else {
-                    const start = Math.min(selectionStart.slotIdx, slotIdx);
-                    const end = Math.max(selectionStart.slotIdx, slotIdx);
-                    const rangeKeys = [];
-                    for (let i = start; i <= end; i++) rangeKeys.push(`${dateStr}:${i}`);
-                    nextSlots = selectionStart.wasSelected 
-                        ? myCurrentSlots.filter(s => !rangeKeys.includes(s))
-                        : [...new Set([...myCurrentSlots, ...rangeKeys])];
-                    setSelectionStart(null);
-                }
-                try { await updateDoc(ref, { slots: nextSlots }); } catch (e) {}
-            };
-
-            const slotDetails = useMemo(() => {
-                const map = {};
-                allAvailability.forEach(data => {
-                    data.slots?.forEach(slotKey => {
-                        if (!map[slotKey]) map[slotKey] = [];
-                        map[slotKey].push({ uid: data.uid, name: data.name, photoURL: data.photoURL });
-                    });
-                });
-                return map;
-            }, [allAvailability]);
-
-            if (error) return <ErrorView message={error} onRetry={() => { setError(null); window.location.reload(); }} />;
-            if (isAuthLoading) return <LoadingView />;
-            if (!user) return <AuthGate onGoogle={loginWithGoogle} onAnon={loginAnonymously} />;
-            if (!sessionId) return <Landing onCreate={handleCreate} user={user} onGoogleLogin={loginWithGoogle} onLogout={handleLogout} />;
-            if (!sessionData) return <LoadingView />;
-
-            if (!isJoined) return (
-                <JoinView 
-                    bandName={sessionData.bandName} 
-                    userName={userName} 
-                    setUserName={setUserName} 
-                    onJoin={handleJoin}
-                    user={user}
-                    onGoogleLogin={loginWithGoogle}
-                    isJoining={isJoining}
-                />
-            );
-
-            const weekDates = getWeekDates(viewStartDate);
-            const activeParticipants = activeDetailSlot ? (slotDetails[activeDetailSlot] || []) : [];
-
-            return (
-                <div className="min-h-screen bg-white flex flex-col font-sans max-h-screen overflow-hidden relative text-slate-900">
-                    {/* Header */}
-                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-40 shrink-0 shadow-sm">
-                        <div className="min-w-0 text-left">
-                            <div className="font-black text-lg text-indigo-600 truncate leading-tight">{sessionData.bandName}</div>
-                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
-                                <span>目標: <span className="text-slate-600">{sessionData.memberCount}人</span></span>
-                                <span>現在: <span className="text-indigo-600">{allAvailability.length}人</span></span>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => {
-                                const url = window.location.origin + window.location.pathname + '?s=' + sessionId;
-                                const t = document.createElement('textarea');
-                                t.value = url; document.body.appendChild(t); t.select();
-                                document.execCommand('copy'); document.body.removeChild(t);
-                                alert('共有URLをコピーしました！');
-                            }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors">
-                                <IconCopy />
-                            </button>
-                            <button onClick={handleLogout} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-colors">
-                                <IconLogout />
-                            </button>
-                        </div>
-                    </header>
-
-                    {/* Week Navigation */}
-                    <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0">
-                        <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() - 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400 p-1">← 前週</button>
-                        <span className="font-black text-sm text-slate-700">{viewStartDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
-                        <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() + 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400 p-1">次週 →</button>
-                    </div>
-
-                    {/* Grid */}
-                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-24">
-                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm">
-                            <div className="w-12 shrink-0 border-r bg-slate-50"></div>
-                            {weekDates.map((d, i) => (
-                                <div key={i} className="flex-1 py-2 text-center border-r last:border-r-0">
-                                    <div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div>
-                                    <div className="font-black text-sm text-slate-700">{d.getDate()}</div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="flex w-full relative">
-                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black">
-                                {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => (
-                                    <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100">{START_HOUR + h}:00</div>
-                                ))}
-                            </div>
-                            <div className="flex-1 flex">
-                                {weekDates.map((d, dayIdx) => {
-                                    const ds = formatDate(d);
-                                    return (
-                                        <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col">
-                                            {Array.from({ length: TOTAL_SLOTS }).map((_, sIdx) => {
-                                                const key = `${ds}:${sIdx}`;
-                                                const participants = slotDetails[key] || [];
-                                                const count = participants.length;
-                                                const isMe = allAvailability.find(a => a.uid === user.uid)?.slots?.includes(key);
-                                                const isFull = count >= sessionData.memberCount;
-                                                const isActive = activeDetailSlot === key;
-                                                
-                                                let cellBg = 'transparent';
-                                                if (isFull) cellBg = '#ef4444'; 
-                                                else if (count > 0) {
-                                                    const ratio = count / sessionData.memberCount;
-                                                    const opacity = 0.25 + (ratio * 0.7); 
-                                                    cellBg = `rgba(67, 56, 202, ${opacity})`; 
-                                                }
-
-                                                return (
-                                                    <div key={sIdx} onClick={() => handleSlotClick(ds, sIdx)}
-                                                        style={{ backgroundColor: cellBg }}
-                                                        className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition hover:opacity-80 
-                                                            ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''}
-                                                            ${isActive ? 'ring-2 ring-indigo-500 z-10' : ''}`}>
-                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
-                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Detail Popup */}
-                    {activeDetailSlot && (
-                        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/95 backdrop-blur-md shadow-2xl rounded-3xl p-4 border border-slate-200 z-50 animate-slide-up text-slate-900 text-left">
-                            <div className="flex justify-between items-center mb-3">
-                                <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
-                                    <IconUsers /> {activeDetailSlot.split(':')[0].replace(/-/g, '/')} {START_HOUR + Math.floor(activeDetailSlot.split(':')[1] / SLOTS_PER_HOUR)}:{activeDetailSlot.split(':')[1] % SLOTS_PER_HOUR === 0 ? '00' : '30'}
-                                </div>
-                                <button onClick={() => setActiveDetailSlot(null)} className="text-slate-400 p-1">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                                </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar">
-                                {activeParticipants.length > 0 ? activeParticipants.map((p) => (
-                                    <div key={p.uid} className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
-                                        {p.photoURL ? <img src={p.photoURL} className="w-4 h-4 rounded-full shadow-sm" /> : <div className="w-4 h-4 bg-indigo-100 rounded-full flex items-center justify-center text-[8px] font-black text-indigo-600 uppercase">{p.name?.charAt(0) || '?'}</div>}
-                                        <span className="text-[10px] font-bold text-slate-700">{p.name}</span>
-                                    </div>
-                                )) : <div className="text-center py-2 text-[10px] font-bold text-slate-400 w-full italic">まだ誰も選んでいません</div>}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        }
-
         // --- Sub-Components ---
 
         function AuthGate({ onGoogle, onAnon }) {
             return (
                 <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center">
                     <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
-                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl">B</div>
+                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl shadow-indigo-100 font-sans">B</div>
                         <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight">BandSync</h1>
                         <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed">練習日程をみんなで共有しよう</p>
                         <div className="space-y-4">
@@ -488,7 +189,7 @@
                             value={userName || ''} 
                             onChange={e => setUserName(e.target.value)} 
                         />
-                        <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center">
+                        <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center text-white">
                             {isJoining ? "処理中..." : "カレンダーを表示"}
                         </button>
                     </div>
@@ -506,6 +207,302 @@
                         <p className="text-sm text-slate-600 mb-6 leading-relaxed text-center whitespace-pre-wrap">{message}</p>
                         <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-all text-center">やり直す</button>
                     </div>
+                </div>
+            );
+        }
+
+        // --- Main Component ---
+        function App() {
+            const [user, setUser] = useState(null);
+            const [isAuthLoading, setIsAuthLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [sessionId, setSessionId] = useState(new URLSearchParams(window.location.search).get('s') || null);
+            const [sessionData, setSessionData] = useState(null);
+            const [allAvailability, setAllAvailability] = useState([]);
+            const [userName, setUserName] = useState('');
+            const [isJoined, setIsJoined] = useState(false);
+            const [isJoining, setIsJoining] = useState(false);
+            const [viewStartDate, setViewStartDate] = useState(new Date());
+            const [selectionStart, setSelectionStart] = useState(null);
+            const [activeDetailSlot, setActiveDetailSlot] = useState(null);
+
+            // 認証状態の監視
+            useEffect(() => {
+                const unsub = onAuthStateChanged(auth, (u) => {
+                    setUser(u);
+                    setIsAuthLoading(false);
+                    if (u && !userName) {
+                        setUserName(u.displayName || '');
+                    }
+                });
+                return () => unsub();
+            }, [userName]);
+
+            // データ購読
+            useEffect(() => {
+                if (!user || !sessionId) return;
+
+                const sessionsCol = collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions');
+                const sessionRef = doc(sessionsCol, sessionId);
+                
+                const unsubSession = onSnapshot(sessionRef, (snap) => {
+                    if (snap.exists()) setSessionData(snap.data());
+                    else setError("セッションが見つかりませんでした。リンクが正しいか確認してください。");
+                }, (err) => setError("データの読み取りに失敗しました。"));
+
+                const availCol = collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability');
+                const unsubAvail = onSnapshot(availCol, (snap) => {
+                    const docs = [];
+                    snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
+                    
+                    const filtered = docs.filter(item => item.sessionId === sessionId);
+                    setAllAvailability(filtered);
+                    
+                    const me = filtered.find(item => item.uid === user.uid);
+                    if (me) {
+                        setIsJoined(true);
+                        setUserName(me.name);
+                    }
+                });
+
+                return () => { unsubSession(); unsubAvail(); };
+            }, [user, sessionId]);
+
+            const loginWithGoogle = async () => {
+                const provider = new GoogleAuthProvider();
+                try {
+                    setError(null);
+                    const result = await signInWithPopup(auth, provider);
+                    if (result.user) setUserName(result.user.displayName || '');
+                } catch (e) {
+                    setError(`Googleログイン失敗: ${e.message}`);
+                }
+            };
+
+            const loginAnonymously = async () => {
+                try { 
+                    setError(null);
+                    await signInAnonymously(auth); 
+                } catch (e) { 
+                    setError("ログインに失敗しました。"); 
+                }
+            };
+
+            const handleLogout = async () => {
+                if (confirm("ログアウトしますか？")) {
+                    await signOut(auth);
+                    window.location.reload();
+                }
+            };
+
+            const handleCreate = async (bandName, count) => {
+                if (!user) return;
+                const id = generateId();
+                const data = {
+                    id, bandName, memberCount: parseInt(count),
+                    startDate: formatDate(new Date()), createdAt: Date.now(), creatorUid: user.uid
+                };
+                try {
+                    const sessionRef = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', id);
+                    await setDoc(sessionRef, data);
+                    setSessionId(id);
+                } catch (e) { setError(`作成失敗: ${e.message}`); }
+            };
+
+            const handleJoin = async () => {
+                if (!userName || !userName.trim() || !user || !sessionId) return;
+                setIsJoining(true);
+                try {
+                    const docId = `${sessionId}_${user.uid}`;
+                    const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
+                    const myExistingData = allAvailability.find(a => a.uid === user.uid);
+                    
+                    await setDoc(ref, { 
+                        sessionId,
+                        uid: user.uid,
+                        name: userName.trim(), 
+                        slots: myExistingData?.slots || [],
+                        photoURL: user.photoURL || null,
+                        lastUpdated: Date.now()
+                    }, { merge: true });
+                    
+                    setIsJoined(true);
+                } catch (e) { 
+                    console.error(e);
+                    setError(`参加に失敗しました。Firestoreの書き込み権限を確認してください。`); 
+                } finally {
+                    setIsJoining(false);
+                }
+            };
+
+            const handleSlotClick = async (dateStr, slotIdx) => {
+                if (!isJoined || !user || !sessionId) return;
+                const key = `${dateStr}:${slotIdx}`;
+                setActiveDetailSlot(key);
+
+                const docId = `${sessionId}_${user.uid}`;
+                const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
+                const myData = allAvailability.find(a => a.uid === user.uid);
+                const myCurrentSlots = myData?.slots || [];
+                const amISelected = myCurrentSlots.includes(key);
+
+                let nextSlots;
+                if (!selectionStart || selectionStart.dateStr !== dateStr) {
+                    nextSlots = amISelected ? myCurrentSlots.filter(s => s !== key) : [...myCurrentSlots, key];
+                    setSelectionStart({ dateStr, slotIdx, wasSelected: amISelected });
+                } else {
+                    const start = Math.min(selectionStart.slotIdx, slotIdx);
+                    const end = Math.max(selectionStart.slotIdx, slotIdx);
+                    const rangeKeys = [];
+                    for (let i = start; i <= end; i++) rangeKeys.push(`${dateStr}:${i}`);
+                    nextSlots = selectionStart.wasSelected 
+                        ? myCurrentSlots.filter(s => !rangeKeys.includes(s))
+                        : [...new Set([...myCurrentSlots, ...rangeKeys])];
+                    setSelectionStart(null);
+                }
+                try { await updateDoc(ref, { slots: nextSlots }); } catch (e) {}
+            };
+
+            const slotDetails = useMemo(() => {
+                const map = {};
+                allAvailability.forEach(data => {
+                    data.slots?.forEach(slotKey => {
+                        if (!map[slotKey]) map[slotKey] = [];
+                        map[slotKey].push({ uid: data.uid, name: data.name, photoURL: data.photoURL });
+                    });
+                });
+                return map;
+            }, [allAvailability]);
+
+            if (error) return <ErrorView message={error} onRetry={() => { setError(null); window.location.reload(); }} />;
+            if (isAuthLoading) return <LoadingView />;
+            if (!user) return <AuthGate onGoogle={loginWithGoogle} onAnon={loginAnonymously} />;
+            if (!sessionId) return <Landing onCreate={handleCreate} user={user} onGoogleLogin={loginWithGoogle} onLogout={handleLogout} />;
+            if (!sessionData) return <LoadingView />;
+
+            if (!isJoined) return (
+                <JoinView 
+                    bandName={sessionData.bandName} 
+                    userName={userName} 
+                    setUserName={setUserName} 
+                    onJoin={handleJoin}
+                    user={user}
+                    onGoogleLogin={loginWithGoogle}
+                    isJoining={isJoining}
+                />
+            );
+
+            const weekDates = getWeekDates(viewStartDate);
+            const activeParticipants = activeDetailSlot ? (slotDetails[activeDetailSlot] || []) : [];
+
+            return (
+                <div className="min-h-screen bg-white flex flex-col font-sans max-h-screen overflow-hidden relative text-slate-900">
+                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-40 shrink-0 shadow-sm">
+                        <div className="min-w-0 text-left">
+                            <div className="font-black text-lg text-indigo-600 truncate leading-tight">{sessionData.bandName}</div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                                <span>目標: <span className="text-slate-600">{sessionData.memberCount}人</span></span>
+                                <span>現在: <span className="text-indigo-600">{allAvailability.length}人</span></span>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => {
+                                const url = window.location.origin + window.location.pathname + '?s=' + sessionId;
+                                const t = document.createElement('textarea');
+                                t.value = url; document.body.appendChild(t); t.select();
+                                document.execCommand('copy'); document.body.removeChild(t);
+                                alert('共有URLをコピーしました！');
+                            }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors">
+                                <IconCopy />
+                            </button>
+                            <button onClick={handleLogout} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-colors">
+                                <IconLogout />
+                            </button>
+                        </div>
+                    </header>
+
+                    <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0">
+                        <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() - 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400 p-1">← 前週</button>
+                        <span className="font-black text-sm text-slate-700">{viewStartDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
+                        <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() + 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400 p-1">次週 →</button>
+                    </div>
+
+                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-24">
+                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm">
+                            <div className="w-12 shrink-0 border-r bg-slate-50"></div>
+                            {weekDates.map((d, i) => (
+                                <div key={i} className="flex-1 py-2 text-center border-r last:border-r-0">
+                                    <div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div>
+                                    <div className="font-black text-sm text-slate-700">{d.getDate()}</div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex w-full relative">
+                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black">
+                                {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => (
+                                    <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100">{START_HOUR + h}:00</div>
+                                ))}
+                            </div>
+                            <div className="flex-1 flex">
+                                {weekDates.map((d, dayIdx) => {
+                                    const ds = formatDate(d);
+                                    return (
+                                        <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col">
+                                            {Array.from({ length: TOTAL_SLOTS }).map((_, sIdx) => {
+                                                const key = `${ds}:${sIdx}`;
+                                                const participants = slotDetails[key] || [];
+                                                const count = participants.length;
+                                                const isMe = allAvailability.find(a => a.uid === user.uid)?.slots?.includes(key);
+                                                const isFull = count >= sessionData.memberCount;
+                                                const isActive = activeDetailSlot === key;
+                                                
+                                                let cellBg = 'transparent';
+                                                if (isFull) cellBg = '#ef4444'; 
+                                                else if (count > 0) {
+                                                    const ratio = count / sessionData.memberCount;
+                                                    const opacity = 0.25 + (ratio * 0.7); 
+                                                    cellBg = `rgba(67, 56, 202, ${opacity})`; 
+                                                }
+
+                                                return (
+                                                    <div key={sIdx} onClick={() => handleSlotClick(ds, sIdx)}
+                                                        style={{ backgroundColor: cellBg }}
+                                                        className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition hover:opacity-80 
+                                                            ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''}
+                                                            ${isActive ? 'ring-2 ring-indigo-500 z-10' : ''}`}>
+                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
+                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {activeDetailSlot && (
+                        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/95 backdrop-blur-md shadow-2xl rounded-3xl p-4 border border-slate-200 z-50 animate-slide-up text-slate-900 text-left">
+                            <div className="flex justify-between items-center mb-3">
+                                <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
+                                    <IconUsers /> {activeDetailSlot.split(':')[0]} {START_HOUR + Math.floor(activeDetailSlot.split(':')[1] / SLOTS_PER_HOUR)}:{activeDetailSlot.split(':')[1] % SLOTS_PER_HOUR === 0 ? '00' : '30'}
+                                </div>
+                                <button onClick={() => setActiveDetailSlot(null)} className="text-slate-400 p-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                </button>
+                            </div>
+                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar">
+                                {activeParticipants.length > 0 ? activeParticipants.map((p) => (
+                                    <div key={p.uid} className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                                        {p.photoURL ? <img src={p.photoURL} className="w-4 h-4 rounded-full shadow-sm" /> : <div className="w-4 h-4 bg-indigo-100 rounded-full flex items-center justify-center text-[8px] font-black text-indigo-600 uppercase">{p.name?.charAt(0) || '?'}</div>}
+                                        <span className="text-[10px] font-bold text-slate-700">{p.name}</span>
+                                    </div>
+                                )) : <div className="text-center py-2 text-[10px] font-bold text-slate-400 w-full italic">まだ誰も選んでいません</div>}
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         }
