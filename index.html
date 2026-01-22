@@ -25,7 +25,7 @@
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useCallback } = React;
 
         // --- Firebase Modules ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -60,33 +60,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = "band-sync-v5-final";
-
-        // --- Constants ---
-        const START_HOUR = 8;
-        const END_HOUR = 23;
-        const SLOTS_PER_HOUR = 2;
-        const TOTAL_SLOTS = (END_HOUR - START_HOUR + 1) * SLOTS_PER_HOUR;
-        const DAYS_OF_WEEK = ['日', '月', '火', '水', '木', '金', '土'];
-
-        // --- Helpers ---
-        const formatDate = (date) => {
-            const y = date.getFullYear();
-            const m = (date.getMonth() + 1).toString().padStart(2, '0');
-            const d = date.getDate().toString().padStart(2, '0');
-            return `${y}-${m}-${d}`;
-        };
-        const getWeekDates = (startDate) => {
-            const dates = [];
-            const base = new Date(startDate);
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(base);
-                d.setDate(base.getDate() + i);
-                dates.push(d);
-            }
-            return dates;
-        };
-        const generateId = () => Math.random().toString(36).substring(2, 11);
+        const appId = "band-sync-production-v6"; 
 
         // --- Icons ---
         const IconGoogle = () => <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>;
@@ -103,43 +77,51 @@
             const [availabilities, setAvailabilities] = useState({});
             const [userName, setUserName] = useState('');
             const [isJoined, setIsJoined] = useState(false);
+            const [isJoining, setIsJoining] = useState(false);
             const [viewStartDate, setViewStartDate] = useState(new Date());
             const [selectionStart, setSelectionStart] = useState(null);
             const [activeDetailSlot, setActiveDetailSlot] = useState(null);
 
-            // 認証監視と名前の初期セット
+            // --- 認証監視 ---
             useEffect(() => {
                 const unsub = onAuthStateChanged(auth, (u) => {
                     setUser(u);
                     setIsAuthLoading(false);
-                    // 名前が未設定かつログインユーザーがいれば、Googleの名前を初期値にする
-                    if (u && !userName) {
-                        setUserName(u.displayName || '');
+                    if (u && u.displayName && !userName) {
+                        setUserName(u.displayName);
                     }
                 });
                 return () => unsub();
-            }, [userName]);
+            }, []);
 
-            // データのリアルタイム購読
+            // --- データ購読 ---
             useEffect(() => {
                 if (!user || !sessionId) return;
+
                 const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
                 const unsubSession = onSnapshot(sessionRef, (snap) => {
-                    if (snap.exists()) setSessionData(snap.data());
-                    else setError("セッションが見つかりません。正しいリンクか確認してください。");
-                }, (err) => setError("データの読み取りに失敗しました。"));
+                    if (snap.exists()) {
+                        setSessionData(snap.data());
+                    } else {
+                        setError("セッションが見つかりませんでした。");
+                    }
+                }, (err) => {
+                    console.error("Firestore Error (Session):", err);
+                    setError("データの読み取りに失敗しました。");
+                });
 
                 const availCol = collection(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability');
                 const unsubAvail = onSnapshot(availCol, (snap) => {
                     const data = {};
                     snap.forEach(d => data[d.id] = d.data());
                     setAvailabilities(data);
-                    // 自分のデータが既にDBにあれば自動でカレンダー表示へ
+                    
                     if (data[user.uid]) {
-                        setUserName(data[user.uid].name);
                         setIsJoined(true);
+                        setUserName(data[user.uid].name || user.displayName || '');
                     }
                 });
+
                 return () => { unsubSession(); unsubAvail(); };
             }, [user, sessionId]);
 
@@ -147,9 +129,13 @@
                 const provider = new GoogleAuthProvider();
                 try {
                     setError(null);
-                    await signInWithPopup(auth, provider);
+                    const result = await signInWithPopup(auth, provider);
+                    if (result.user) {
+                        setUserName(result.user.displayName || '');
+                    }
                 } catch (e) {
-                    setError(`ログイン失敗: ${e.message}`);
+                    console.error("Login Error:", e);
+                    setError(`ログインに失敗しました: ${e.message}`);
                 }
             };
 
@@ -158,7 +144,7 @@
                     setError(null);
                     await signInAnonymously(auth); 
                 } catch (e) { 
-                    setError("匿名ログインに失敗しました。"); 
+                    setError("ログインに失敗しました。"); 
                 }
             };
 
@@ -171,7 +157,7 @@
 
             const handleCreate = async (bandName, count) => {
                 if (!user) return;
-                const id = generateId();
+                const id = Math.random().toString(36).substring(2, 11);
                 const data = {
                     id, bandName, memberCount: parseInt(count),
                     startDate: formatDate(new Date()), createdAt: Date.now(), creatorUid: user.uid
@@ -182,22 +168,26 @@
                     const url = new URL(window.location.href);
                     url.searchParams.set('s', id);
                     window.history.pushState({}, '', url);
-                } catch (e) { setError(`カレンダー作成失敗: ${e.message}`); }
+                } catch (e) { setError(`作成失敗: ${e.message}`); }
             };
 
             const handleJoin = async () => {
                 if (!userName.trim() || !user || !sessionId) return;
+                setIsJoining(true);
                 try {
                     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability', user.uid);
                     await setDoc(ref, { 
                         name: userName, 
                         slots: availabilities[user.uid]?.slots || [],
-                        photoURL: user.photoURL || null 
+                        photoURL: user.photoURL || null,
+                        lastUpdated: Date.now()
                     }, { merge: true });
                     setIsJoined(true);
                 } catch (e) { 
-                    console.error(e);
-                    setError(`参加処理に失敗しました。通信環境やFirestoreの権限を確認してください。`); 
+                    console.error("Join Write Error:", e);
+                    setError(`カレンダーの表示に失敗しました。`); 
+                } finally {
+                    setIsJoining(false);
                 }
             };
 
@@ -252,16 +242,33 @@
                     onJoin={handleJoin}
                     user={user}
                     onGoogleLogin={loginWithGoogle}
+                    isJoining={isJoining}
                 />
             );
 
+            const formatDate = (date) => {
+                const y = date.getFullYear();
+                const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                const d = date.getDate().toString().padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            };
+            const getWeekDates = (startDate) => {
+                const dates = [];
+                const base = new Date(startDate);
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(base);
+                    d.setDate(base.getDate() + i);
+                    dates.push(d);
+                }
+                return dates;
+            };
             const weekDates = getWeekDates(viewStartDate);
             const activeParticipants = activeDetailSlot ? (slotDetails[activeDetailSlot] || []) : [];
 
             return (
                 <div className="min-h-screen bg-white flex flex-col font-sans max-h-screen overflow-hidden relative">
                     <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-40 shrink-0 shadow-sm">
-                        <div className="min-w-0">
+                        <div className="min-w-0 text-left">
                             <div className="font-black text-lg text-indigo-600 truncate leading-tight">{sessionData.bandName}</div>
                             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
                                 <span>目標: <span className="text-slate-600">{sessionData.memberCount}人</span></span>
@@ -270,11 +277,11 @@
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => {
-                                const url = window.location.href.split('?')[0] + '?s=' + sessionId;
+                                const url = window.location.origin + window.location.pathname + '?s=' + sessionId;
                                 const t = document.createElement('textarea');
                                 t.value = url; document.body.appendChild(t); t.select();
                                 document.execCommand('copy'); document.body.removeChild(t);
-                                alert('共有URLをコピーしました！メンバーに送ってください。');
+                                alert('URLをコピーしました！メンバーに送ってください。');
                             }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors">
                                 <IconCopy />
                             </button>
@@ -290,7 +297,7 @@
                         <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() + 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400 p-1">次週 →</button>
                     </div>
 
-                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-24">
+                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-24 text-slate-900">
                         <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm">
                             <div className="w-12 shrink-0 border-r bg-slate-50"></div>
                             {weekDates.map((d, i) => (
@@ -348,8 +355,8 @@
                     </div>
 
                     {activeDetailSlot && (
-                        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/95 backdrop-blur-md shadow-2xl rounded-3xl p-4 border border-slate-200 z-50 animate-slide-up">
-                            <div className="flex justify-between items-center mb-3 text-slate-900">
+                        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/95 backdrop-blur-md shadow-2xl rounded-3xl p-4 border border-slate-200 z-50 animate-slide-up text-slate-900">
+                            <div className="flex justify-between items-center mb-3">
                                 <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
                                     <IconUsers /> {activeDetailSlot.split(':')[0]} {START_HOUR + Math.floor(activeDetailSlot.split(':')[1] / 2)}:{activeDetailSlot.split(':')[1] % 2 === 0 ? '00' : '30'}
                                 </div>
@@ -360,7 +367,7 @@
                             <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar">
                                 {activeParticipants.length > 0 ? activeParticipants.map((p) => (
                                     <div key={p.uid} className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
-                                        {p.photoURL ? <img src={p.photoURL} className="w-4 h-4 rounded-full" /> : <div className="w-4 h-4 bg-indigo-100 rounded-full flex items-center justify-center text-[8px] font-black text-indigo-600 uppercase">{p.name.charAt(0)}</div>}
+                                        {p.photoURL ? <img src={p.photoURL} className="w-4 h-4 rounded-full shadow-sm" /> : <div className="w-4 h-4 bg-indigo-100 rounded-full flex items-center justify-center text-[8px] font-black text-indigo-600 uppercase">{p.name?.charAt(0) || '?'}</div>}
                                         <span className="text-[10px] font-bold text-slate-700">{p.name}</span>
                                     </div>
                                 )) : <div className="text-center py-2 text-[10px] font-bold text-slate-400 w-full italic">まだ誰も選んでいません</div>}
@@ -371,21 +378,19 @@
             );
         }
 
-        // --- Auth & Landing Components ---
-
         function AuthGate({ onGoogle, onAnon }) {
             return (
                 <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center">
                     <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
-                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl">B</div>
+                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl shadow-indigo-100">B</div>
                         <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight">BandSync</h1>
-                        <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed text-center">予定をみんなで共有しよう</p>
+                        <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed">練習日程をみんなで共有しよう</p>
                         <div className="space-y-4">
-                            <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm border-2 border-indigo-600">
+                            <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm">
                                 <IconGoogle /> Googleアカウントでログイン
                             </button>
                             <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3">または</div>
-                            <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all border-2 border-transparent">名前だけで始める（匿名）</button>
+                            <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all">名前だけで始める（匿名）</button>
                         </div>
                     </div>
                 </div>
@@ -402,7 +407,7 @@
                     <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
                         {isAnon && (
                             <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-center">
-                                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">ゲストとしてログイン中</p>
+                                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 leading-none">ゲスト参加中</p>
                                 <button onClick={onGoogleLogin} className="w-full py-2 bg-white border border-amber-200 text-amber-700 text-[10px] font-black rounded-lg hover:bg-amber-100 transition-all flex items-center justify-center">
                                     <IconGoogle /> Googleログインに切り替える
                                 </button>
@@ -416,24 +421,22 @@
                                     <p className="font-black text-sm truncate w-32">{user.displayName || "ゲストユーザー"}</p>
                                 </div>
                             </div>
-                            <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2">
-                                <IconLogout />
-                            </button>
+                            <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2"><IconLogout /></button>
                         </div>
-                        <div className="space-y-8 text-center">
+                        <div className="space-y-8 text-center text-slate-900">
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">プロジェクト名 / バンド名</label>
                                 <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: BABA-LIVE" value={name} onChange={e => setName(e.target.value)} />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">目標人数</label>
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">目標人数</label>
                                 <div className="flex items-center justify-between gap-4">
-                                    <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">-</button>
+                                    <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black">-</button>
                                     <div className="text-center flex-1">
                                         <span className="text-4xl font-black tabular-nums">{num}</span>
                                         <span className="text-xs font-bold ml-1 text-slate-400 uppercase">人</span>
                                     </div>
-                                    <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">+</button>
+                                    <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black">+</button>
                                 </div>
                             </div>
                             <button disabled={!name} onClick={() => onCreate(name, num)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">調整カレンダーを作成</button>
@@ -443,14 +446,14 @@
             );
         }
 
-        function JoinView({ bandName, userName, setUserName, onJoin, user, onGoogleLogin }) {
+        function JoinView({ bandName, userName, setUserName, onJoin, user, onGoogleLogin, isJoining }) {
             const isAnon = user.isAnonymous;
             return (
                 <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4 text-slate-900">
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center">
                         {isAnon && (
                             <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-center">
-                                <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-2">ゲスト参加中</p>
+                                <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-2 leading-none">ゲスト参加中</p>
                                 <button onClick={onGoogleLogin} className="w-full py-2 bg-white border border-amber-200 text-amber-700 text-[10px] font-black rounded-lg hover:bg-amber-100 transition-all flex items-center justify-center">
                                     <IconGoogle /> Googleでログインし直す
                                 </button>
@@ -464,20 +467,23 @@
                             value={userName} 
                             onChange={e => setUserName(e.target.value)} 
                         />
-                        <button onClick={onJoin} disabled={!userName || !userName.trim()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all">カレンダーを表示</button>
+                        <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50">
+                            {isJoining ? "処理中..." : "カレンダーを表示"}
+                        </button>
                     </div>
                 </div>
             );
         }
 
         function LoadingView() { return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse italic uppercase tracking-tighter text-center">LOADING...</div>; }
+        
         function ErrorView({ message, onRetry }) {
             return (
                 <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-center text-slate-900">
                     <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full">
                         <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic">ERROR</h1>
                         <p className="text-sm text-slate-600 mb-6 leading-relaxed">{message}</p>
-                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700">やり直す</button>
+                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-all">リトライして戻る</button>
                     </div>
                 </div>
             );
