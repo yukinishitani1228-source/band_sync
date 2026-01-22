@@ -75,17 +75,17 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appIdPrefix = 'band-sync-stable-v6'; 
+        const appIdPrefix = 'band-sync-stable-v8'; 
         const GOOGLE_CLIENT_ID = "331455156682-9r9jn1jokcdvlm0blsdl5hued8adfmnj.apps.googleusercontent.com";
 
-        // --- 定数 ---
+        // --- Constants ---
         const START_HOUR = 8;
         const END_HOUR = 23;
         const SLOTS_PER_HOUR = 2; 
         const TOTAL_SLOTS = (END_HOUR - START_HOUR + 1) * SLOTS_PER_HOUR; 
         const DAYS_OF_WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
-        // --- ヘルパー ---
+        // --- Helpers ---
         const formatDate = (date) => {
             const y = date.getFullYear();
             const m = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -125,7 +125,7 @@
 
         const generateId = () => Math.random().toString(36).substring(2, 11);
 
-        // --- アイコン ---
+        // --- Icons ---
         const IconGoogle = () => <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>;
         const IconCopy = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
         const IconLogout = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
@@ -163,7 +163,7 @@
                 <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center font-sans">
                     <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
                         <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl shadow-indigo-100">B</div>
-                        <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight text-indigo-600">BandSync</h1>
+                        <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight text-indigo-600 font-sans">BandSync</h1>
                         <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed">練習日程をみんなで共有しよう</p>
                         <div className="space-y-4">
                             <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm text-white">
@@ -192,30 +192,30 @@
                             <div className="flex items-center gap-3">
                                 {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-sm" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
                                 <div>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">{isAnon ? "GUEST" : "LOGGED IN"}</p>
-                                    <p className="font-black text-sm truncate w-32">{user.displayName || "ゲストユーザー"}</p>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1 font-sans">{isAnon ? "GUEST" : "LOGGED IN"}</p>
+                                    <p className="font-black text-sm truncate w-32 font-sans text-slate-900">{user.displayName || "ゲストユーザー"}</p>
                                 </div>
                             </div>
                             <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2 text-left"><IconLogout /></button>
                         </div>
                         <div className="space-y-6 text-slate-900 text-left">
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">調整プロジェクト名</label>
-                                <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900" placeholder="例: BABA-LIVE" value={name} onChange={e => setName(e.target.value)} />
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center font-sans">調整プロジェクト名</label>
+                                <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 font-sans" placeholder="例: BABA-LIVE" value={name} onChange={e => setName(e.target.value)} />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">開始日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none font-sans" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">終了日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none font-sans" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
+                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center font-sans">開始日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-sans" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
+                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center font-sans">終了日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-sans" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center font-sans">目標人数</label>
-                                <div className="flex items-center justify-between gap-4 font-sans">
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center font-sans font-sans">目標人数</label>
+                                <div className="flex items-center justify-between gap-4 font-sans text-slate-900">
                                     <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors text-slate-900 font-sans">-</button>
                                     <div className="text-center flex-1"><span className="text-4xl font-black tabular-nums text-slate-900">{num}</span><span className="text-xs font-bold ml-1 text-slate-400 uppercase">人</span></div>
                                     <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors text-slate-900 font-sans">+</button>
                                 </div>
                             </div>
-                            <button disabled={!name || new Date(startDate) > new Date(endDate)} onClick={() => onCreate(name, num, startDate, endDate)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all text-center">調整カレンダーを作成</button>
+                            <button disabled={!name || new Date(startDate) > new Date(endDate)} onClick={() => onCreate(name, num, startDate, endDate)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all text-center text-white disabled:opacity-50">調整カレンダーを作成</button>
                         </div>
                     </div>
                 </div>
@@ -227,9 +227,9 @@
                 <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4 text-slate-900 text-left font-sans">
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center">
                         <h1 className="text-xl font-black mb-2 text-indigo-600 italic text-center text-indigo-600 font-sans">BandSync</h1>
-                        <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight text-center">{bandName}</p>
-                        <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4 text-slate-900" placeholder="あなたの表示名" value={userName || ''} onChange={e => setUserName(e.target.value)} />
-                        <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center text-white">
+                        <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight text-center font-sans font-sans">{bandName}</p>
+                        <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4 text-slate-900 font-sans" placeholder="あなたの表示名" value={userName || ''} onChange={e => setUserName(e.target.value)} />
+                        <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center text-white font-sans">
                             {isJoining ? "処理中..." : "カレンダーを表示"}
                         </button>
                     </div>
@@ -290,60 +290,62 @@
                 return () => { unsubSession(); unsubAvail(); };
             }, [user, sessionId]);
 
-            const loginWithGoogle = async () => {
+            const loginWithGoogle = async (forceSelect = false) => {
                 const provider = new GoogleAuthProvider();
                 provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
+                if (forceSelect) provider.setCustomParameters({ prompt: 'select_account' });
                 try {
-                    setError(null);
                     const result = await signInWithPopup(auth, provider);
                     const credential = GoogleAuthProvider.credentialFromResult(result);
                     setGoogleToken(credential.accessToken);
-                    if (result.user) setUserName(result.user.displayName || '');
                     return credential.accessToken;
-                } catch (e) { setError(`Googleログイン失敗: ${e.message}`); return null; }
+                } catch (e) {
+                    console.error(e);
+                    if (e.code === 'auth/popup-blocked') {
+                        alert("ポップアップがブロックされました。ブラウザの設定で許可してください。");
+                    }
+                    return null;
+                }
             };
 
-            const handleLogout = async () => {
-                if (confirm("ログアウトしますか？")) { await signOut(auth); window.location.reload(); }
-            };
-
-            const handleCreate = async (bandName, count, startDate, endDate) => {
-                if (!user) return;
-                const id = generateId();
-                const data = { id, bandName, memberCount: parseInt(count), startDate, endDate, createdAt: Date.now(), creatorUid: user.uid };
-                try { await setDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', id), data); setSessionId(id); } catch (e) { setError(`作成失敗: ${e.message}`); }
-            };
-
-            const handleJoin = async () => {
-                if (!userName || !userName.trim() || !user || !sessionId) return;
-                setIsJoining(true);
-                try {
-                    const docId = `${sessionId}_${user.uid}`;
-                    const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
-                    const myExistingData = allAvailability.find(a => a.uid === user.uid);
-                    await setDoc(ref, { sessionId, uid: user.uid, name: userName.trim(), slots: myExistingData?.slots || [], photoURL: user.photoURL || null, lastUpdated: Date.now() }, { merge: true });
-                    setIsJoined(true);
-                } catch (e) { setError(`参加失敗。`); } finally { setIsJoining(false); }
-            };
-
-            const syncCalendar = async () => {
+            const syncCalendar = async (retryWithToken = null) => {
                 if (!user || user.isAnonymous) return;
-                let token = googleToken;
-                if (!token) token = await loginWithGoogle();
-                if (!token) return;
-
                 setIsSyncing(true);
+                
+                let token = retryWithToken || googleToken;
+                if (!token) {
+                    token = await loginWithGoogle(true);
+                }
+                if (!token) {
+                    setIsSyncing(false);
+                    return;
+                }
+
                 try {
                     const dates = getWeekDatesWithinRange(viewStartDate, sessionData.startDate, sessionData.endDate);
                     const timeMin = new Date(dates[0]); timeMin.setHours(0,0,0,0);
                     const timeMax = new Date(dates[dates.length-1]); timeMax.setHours(23,59,59,999);
 
-                    const resp = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}&singleEvents=true`, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-                    const data = await resp.json();
-                    if (data.error) throw new Error(data.error.message);
+                    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${timeMin.toISOString()}&timeMax=${timeMax.toISOString()}&singleEvents=true`;
+                    
+                    const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+                    
+                    if (resp.status === 401 || resp.status === 403) {
+                        // トークン切れの場合、再取得して一度だけリトライ
+                        if (!retryWithToken) {
+                            const newToken = await loginWithGoogle(true);
+                            if (newToken) return syncCalendar(newToken);
+                        }
+                        const errData = await resp.json();
+                        throw new Error(`Google API Error (${resp.status}): ${errData.error?.message || 'Unauthorized'}`);
+                    }
 
+                    if (!resp.ok) {
+                        const errData = await resp.json();
+                        throw new Error(`Error ${resp.status}: ${errData.error?.message || 'API Request Failed'}`);
+                    }
+
+                    const data = await resp.json();
                     const events = data.items.map(e => ({
                         start: new Date(e.start.dateTime || e.start.date),
                         end: new Date(e.end.dateTime || e.end.date)
@@ -357,18 +359,20 @@
                             slotStart.setHours(START_HOUR + Math.floor(sIdx / 2), (sIdx % 2) * 30, 0, 0);
                             const slotEnd = new Date(slotStart);
                             slotEnd.setMinutes(slotEnd.getMinutes() + 30);
-
-                            // 予定と被っていないスロット（空き時間）を判定
                             const isBusy = events.some(e => (slotStart < e.end && slotEnd > e.start));
                             if (!isBusy) newSlots.push(`${ds}:${sIdx}`);
                         }
                     });
 
                     const docId = `${sessionId}_${user.uid}`;
-                    const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
-                    await setDoc(ref, { slots: newSlots }, { merge: true });
-                    alert("カレンダーから空き時間を自動入力しました！");
-                } catch (e) { console.error(e); alert("カレンダー同期中にエラーが発生しました。"); } finally { setIsSyncing(false); }
+                    await updateDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId), { slots: newSlots });
+                    alert("カレンダー同期に成功しました！予定のない時間を『空き』として反映しました。");
+                } catch (e) {
+                    console.error("Sync Error:", e);
+                    alert(`同期エラーが発生しました：\n${e.message}\n\n【確認事項】\n・Google CloudでこのURLが許可されているか\n・テストユーザーに登録されているか`);
+                } finally {
+                    setIsSyncing(false);
+                }
             };
 
             const handleSlotClick = async (dateStr, slotIdx) => {
@@ -428,8 +432,13 @@
 
             if (error) return <ErrorView message={error} onRetry={() => { setError(null); window.location.reload(); }} />;
             if (isAuthLoading) return <LoadingView />;
-            if (!user) return <AuthGate onGoogle={loginWithGoogle} onAnon={() => signInAnonymously(auth)} />;
-            if (!sessionId) return <Landing onCreate={handleCreate} user={user} onLogout={handleLogout} />;
+            if (!user) return <AuthGate onGoogle={() => loginWithGoogle()} onAnon={() => signInAnonymously(auth)} />;
+            if (!sessionId) return <Landing onCreate={(...args) => {
+                const id = generateId();
+                setDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', id), {
+                    id, bandName: args[0], memberCount: parseInt(args[1]), startDate: args[2], endDate: args[3], createdAt: Date.now(), creatorUid: user.uid
+                }).then(() => setSessionId(id));
+            }} user={user} onLogout={handleLogout} />;
             if (!sessionData || !viewStartDate) return <LoadingView />;
             if (!isJoined) return <JoinView bandName={sessionData.bandName} userName={userName} setUserName={setUserName} onJoin={handleJoin} isJoining={isJoining} />;
 
@@ -438,15 +447,15 @@
             const canGoNext = (() => { const next = new Date(viewStartDate); next.setDate(next.getDate() + 7); return next <= new Date(sessionData.endDate); })();
 
             return (
-                <div className="h-screen bg-white flex flex-col font-sans overflow-hidden relative text-slate-900 font-sans">
+                <div className="h-screen bg-white flex flex-col font-sans overflow-hidden relative text-slate-900">
                     <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-[60] shrink-0 shadow-sm">
                         <div className="min-w-0">
                             <div className="font-black text-lg text-indigo-600 truncate leading-tight">{sessionData.bandName}</div>
                             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2"><span>目標: {sessionData.memberCount}人</span><span>参加: {allAvailability.length}人</span></div>
                         </div>
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-1.5 font-sans">
                             {user && !user.isAnonymous && (
-                                <button onClick={syncCalendar} disabled={isSyncing} className={`p-2.5 rounded-xl transition-colors ${isSyncing ? 'animate-pulse' : ''} bg-indigo-50 text-indigo-600 hover:bg-indigo-100`} title="Googleカレンダーから空き時間を同期"><IconCalendar /></button>
+                                <button onClick={() => syncCalendar()} disabled={isSyncing} className={`p-2.5 rounded-xl transition-colors ${isSyncing ? 'animate-pulse' : ''} bg-indigo-50 text-indigo-600 hover:bg-indigo-100`} title="Googleカレンダーから同期"><IconCalendar /></button>
                             )}
                             <button onClick={() => setShowMatchModal(true)} className="p-2.5 bg-emerald-50 text-emerald-500 rounded-xl hover:bg-emerald-100 relative" title="全員OK日程"><IconCircleOK />{matchedRanges.length > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white">{matchedRanges.length}</div>}</button>
                             <button onClick={() => setShowStudioModal(true)} className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100" title="スタジオ予約"><IconSuta /></button>
@@ -455,7 +464,7 @@
                         </div>
                     </header>
 
-                    <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0">
+                    <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0 font-sans">
                         <button disabled={!canGoPrev} onClick={() => { const n = new Date(viewStartDate); n.setDate(n.getDate()-7); setViewStartDate(n); }} className={`text-xs font-black p-1 ${!canGoPrev ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>← 前週</button>
                         <span className="font-black text-sm text-slate-700">{viewStartDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
                         <button disabled={!canGoNext} onClick={() => { const n = new Date(viewStartDate); n.setDate(n.getDate()+7); setViewStartDate(n); }} className={`text-xs font-black p-1 ${!canGoNext ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>次週 →</button>
@@ -463,11 +472,11 @@
 
                     <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-10 bg-white">
                         <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm text-center">
-                            <div className="w-12 shrink-0 border-r bg-slate-50"></div>
+                            <div className="w-12 shrink-0 border-r bg-slate-50 font-sans"></div>
                             {weekDates.map((d, i) => (
-                                <div key={i} className="flex-1 py-2 border-r last:border-r-0 font-sans"><div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div><div className="font-black text-sm text-slate-700">{d.getDate()}</div></div>
+                                <div key={i} className="flex-1 py-2 border-r last:border-r-0 font-sans font-sans"><div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div><div className="font-black text-sm text-slate-700">{d.getDate()}</div></div>
                             ))}
-                            {Array.from({ length: 7 - weekDates.length }).map((_, i) => <div key={'e-'+i} className="flex-1 bg-slate-50/50 border-r last:border-r-0"></div>)}
+                            {Array.from({ length: 7 - weekDates.length }).map((_, i) => <div key={'e-'+i} className="flex-1 bg-slate-50/50 border-r last:border-r-0 font-sans"></div>)}
                         </div>
 
                         <div className="flex w-full relative">
@@ -487,9 +496,9 @@
                                                         {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
                                                         {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white font-sans' : 'text-indigo-900/40 font-sans'}`}>{count}</div>}
                                                         {isPeeking && participants.length > 0 && (
-                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white/98 backdrop-blur shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none text-left font-sans font-sans">
+                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white/98 backdrop-blur shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none text-left font-sans">
                                                                 {participants.map((p) => (
-                                                                    <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center">{p.photoURL ? <img src={p.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-black text-indigo-600 uppercase font-sans">{p.name?.charAt(0) || '?'}</span>}</div>
+                                                                    <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center">{p.photoURL ? <img src={p.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-black text-indigo-600 uppercase">{p.name?.charAt(0) || '?'}</span>}</div>
                                                                 ))}
                                                             </div>
                                                         )}
@@ -506,40 +515,40 @@
                     {/* Modals */}
                     {showMatchModal && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMatchModal(false)}></div>
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm font-sans" onClick={() => setShowMatchModal(false)}></div>
                             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans">
-                                <div className="flex justify-between items-center mb-6 text-emerald-500 font-sans font-sans"><div className="flex items-center gap-2"><IconCircleOK /><h2 className="text-xl font-black italic tracking-tighter">全員OKの時間</h2></div><button onClick={() => setShowMatchModal(false)} className="text-slate-300 hover:text-slate-500 p-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                <div className="flex justify-between items-center mb-6 text-emerald-500 font-sans"><div className="flex items-center gap-2"><IconCircleOK /><h2 className="text-xl font-black italic tracking-tighter">全員OKの時間</h2></div><button onClick={() => setShowMatchModal(false)} className="text-slate-300 hover:text-slate-500 p-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
                                 <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 font-sans">
                                     {matchedRanges.length > 0 ? matchedRanges.map((m, idx) => {
                                         const startH = START_HOUR + Math.floor(m.start / 2); const startM = m.start % 2 === 0 ? "00" : "30";
                                         const endH = START_HOUR + Math.floor((m.end + 1) / 2); const endM = (m.end + 1) % 2 === 0 ? "00" : "30";
                                         return (
-                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100 group hover:border-emerald-200 transition-all font-sans font-sans font-sans"><div className="font-black text-slate-800 text-sm">{`${m.date.getMonth() + 1}/${m.date.getDate()}(${DAYS_OF_WEEK[m.date.getDay()]})`}</div><div className="bg-white px-3 py-1 rounded-full text-xs font-black text-emerald-500 shadow-sm font-sans">{startH}:{startM} 〜 {endH}:{endM}</div></div>
+                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100 group hover:border-emerald-200 transition-all font-sans"><div className="font-black text-slate-800 text-sm font-sans">{`${m.date.getMonth() + 1}/${m.date.getDate()}(${DAYS_OF_WEEK[m.date.getDay()]})`}</div><div className="bg-white px-3 py-1 rounded-full text-xs font-black text-emerald-500 shadow-sm font-sans">{startH}:{startM} 〜 {endH}:{endM}</div></div>
                                         );
                                     }) : <div className="py-12 text-center text-slate-300 font-sans">全員が集まれる時間は<br/>まだありません</div>}
                                 </div>
-                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans">Powered by BandSync</p>
+                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans">Powered by BandSync</p>
                             </div>
                         </div>
                     )}
 
                     {showStudioModal && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowStudioModal(false)}></div>
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm font-sans" onClick={() => setShowStudioModal(false)}></div>
                             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans">
-                                <div className="flex justify-between items-center mb-6 text-amber-500 font-sans font-sans font-sans font-sans font-sans"><div className="flex items-center gap-2"><div className="bg-amber-100 px-2 py-1 rounded-lg text-[10px] font-black">スタ</div><h2 className="text-xl font-black italic tracking-tighter font-sans">Studio Booking</h2></div><button onClick={() => setShowStudioModal(false)} className="text-slate-300 hover:text-slate-500 p-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 font-sans font-sans font-sans">
+                                <div className="flex justify-between items-center mb-6 text-amber-500 font-sans"><div className="flex items-center gap-2 font-sans"><div className="bg-amber-100 px-2 py-1 rounded-lg text-[10px] font-black font-sans">スタ</div><h2 className="text-xl font-black italic tracking-tighter">Studio Booking</h2></div><button onClick={() => setShowStudioModal(false)} className="text-slate-300 hover:text-slate-500 p-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 font-sans">
                                     {[
                                         { name: 'ゲートウェイ高田馬場3号店', url: 'http://www.gw-studio.com/studios/studio_baba3rd/index' },
                                         { name: 'バズーカスタジオ高田馬場', url: 'https://bazookastudio.com/' },
                                         { name: 'BASS ON TOP高田馬場', url: 'https://www.bassontop.co.jp/band/takadanobaba/' }
                                     ].map(s => (
-                                        <a key={s.url} href={s.url} target="_blank" className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group font-sans font-sans">
-                                            <div className="text-left font-sans"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 font-sans">Takadanobaba</div><div className="font-black text-slate-700 text-sm font-sans">{s.name}</div></div><div className="text-slate-300 group-hover:text-amber-500"><IconExternal /></div>
+                                        <a key={s.url} href={s.url} target="_blank" className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group font-sans">
+                                            <div className="text-left font-sans"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Takadanobaba</div><div className="font-black text-slate-700 text-sm font-sans">{s.name}</div></div><div className="text-slate-300 group-hover:text-amber-500 font-sans font-sans"><IconExternal /></div>
                                         </a>
                                     ))}
                                 </div>
-                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans font-sans">Powered by BandSync</p>
+                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans">Powered by BandSync</p>
                             </div>
                         </div>
                     )}
