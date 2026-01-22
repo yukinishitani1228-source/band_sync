@@ -29,7 +29,6 @@
         }
         .animate-modal { animation: modalFade 0.2s ease-out forwards; }
 
-        /* 範囲選択の開始地点のハイライト */
         .selection-active {
             box-shadow: inset 0 0 0 3px #4f46e5 !important;
             z-index: 20;
@@ -38,12 +37,17 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
-    <div id="root"></div>
+    <div id="root">
+        <!-- JS読み込み前の待機画面 -->
+        <div class="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse italic uppercase bg-white">
+            Initializing App...
+        </div>
+    </div>
 
     <script type="text/babel" data-type="module">
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
-        // --- Firebase Modules ---
+        // --- Firebase Modules (最新安定版 11.6.1) ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
             getAuth, 
@@ -57,13 +61,12 @@
             getFirestore, 
             doc, 
             setDoc, 
-            getDoc, 
-            collection, 
             onSnapshot, 
+            collection,
             updateDoc 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Firebase Configuration ---
+        // --- Configuration ---
         const firebaseConfig = {
             apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
             authDomain: "bandschedule-98f2c.firebaseapp.com",
@@ -76,7 +79,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appIdPrefix = 'band-sync-final-stable'; 
+        const appIdPrefix = 'band-sync-final-stable-v2'; 
 
         // --- 定数 ---
         const START_HOUR = 8;
@@ -110,23 +113,21 @@
             if (!viewStart) return [];
             const dates = [];
             const rStart = new Date(rangeStart);
-            rStart.setHours(0,0,0,0);
             const rEnd = new Date(rangeEnd);
+            rStart.setHours(0,0,0,0);
             rEnd.setHours(23,59,59,999);
 
             for (let i = 0; i < 7; i++) {
                 const d = new Date(viewStart);
                 d.setDate(viewStart.getDate() + i);
-                if (d >= rStart && d <= rEnd) {
-                    dates.push(d);
-                }
+                if (d >= rStart && d <= rEnd) dates.push(d);
             }
             return dates;
         };
 
         const generateId = () => Math.random().toString(36).substring(2, 11);
 
-        // --- アイコンコンポーネント ---
+        // --- UI アイコン ---
         const IconGoogle = () => <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>;
         const IconCopy = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
         const IconLogout = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
@@ -134,110 +135,80 @@
         const IconCircleOK = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
         const IconSuta = () => <div className="w-5 h-5 flex items-center justify-center font-black text-[10px] leading-none tracking-tighter">スタ</div>;
 
-        // --- UI サブコンポーネント ---
-        function LoadingView() {
-            return (
-                <div className="h-screen flex flex-col items-center justify-center font-black text-slate-300 animate-pulse italic uppercase bg-white">
-                    <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    LOADING...
-                </div>
-            );
-        }
+        // --- コンポーネント ---
+        const Loading = () => (
+            <div className="h-screen flex flex-col items-center justify-center font-black text-slate-300 animate-pulse bg-white italic uppercase tracking-widest">
+                <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+                LOADING...
+            </div>
+        );
 
-        function ErrorView({ message, onRetry }) {
-            return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-slate-900 font-sans">
-                    <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full text-center">
-                        <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic">ERROR</h1>
-                        <p className="text-sm text-slate-600 mb-6 leading-relaxed whitespace-pre-wrap">{message}</p>
-                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-all text-center">やり直す</button>
+        const Error = ({ message, onRetry }) => (
+            <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-slate-900 font-sans">
+                <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full text-center">
+                    <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic">ERROR</h1>
+                    <p className="text-sm text-slate-600 mb-6 leading-relaxed whitespace-pre-wrap">{message}</p>
+                    <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-all text-center">やり直す</button>
+                </div>
+            </div>
+        );
+
+        const Auth = ({ onGoogle, onAnon }) => (
+            <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center">
+                <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
+                    <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl shadow-indigo-100">B</div>
+                    <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight">BandSync</h1>
+                    <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed font-sans">練習日程をみんなで共有しよう</p>
+                    <div className="space-y-4">
+                        <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm">
+                            <IconGoogle /> Googleアカウントでログイン
+                        </button>
+                        <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3">または</div>
+                        <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all">名前だけで始める（匿名）</button>
                     </div>
                 </div>
-            );
-        }
+            </div>
+        );
 
-        function AuthGate({ onGoogle, onAnon }) {
+        const Create = ({ onCreate, user, onLogout }) => {
+            const [name, setName] = useState('');
+            const [num, setNum] = useState(4);
+            const [sDate, setSDate] = useState(formatDate(new Date()));
+            const [eDate, setEDate] = useState(() => {
+                const d = new Date(); d.setDate(d.getDate() + 14); return formatDate(d);
+            });
             return (
                 <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center">
                     <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
-                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl shadow-indigo-100">B</div>
-                        <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight font-sans text-indigo-600">BandSync</h1>
-                        <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed">練習日程をみんなで共有しよう</p>
-                        <div className="space-y-4">
-                            <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm font-sans text-white">
-                                <IconGoogle /> Googleアカウントでログイン
-                            </button>
-                            <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3 font-sans">または</div>
-                            <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all text-slate-500 font-sans">名前だけで始める（匿名）</button>
-                        </div>
-                    </div>
-                </div>
-            );
-        }
-
-        function Landing({ onCreate, user, onLogout }) {
-            const [name, setName] = useState('');
-            const [num, setNum] = useState(4);
-            const [startDate, setStartDate] = useState(formatDate(new Date()));
-            const [endDate, setEndDate] = useState(() => {
-                const d = new Date(); d.setDate(d.getDate() + 14); return formatDate(d);
-            });
-            const isAnon = user.isAnonymous;
-            return (
-                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center font-sans">
-                    <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
                         <div className="flex items-center justify-between mb-8 border-b pb-6 text-left">
                             <div className="flex items-center gap-3">
-                                {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-sm" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
-                                <div>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">{isAnon ? "GUEST" : "LOGGED IN"}</p>
-                                    <p className="font-black text-sm truncate w-32 font-sans text-slate-900">{user.displayName || "ゲストユーザー"}</p>
-                                </div>
+                                {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
+                                <div><p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">{user.isAnonymous ? "GUEST" : "LOGGED IN"}</p><p className="font-black text-sm truncate w-32">{user.displayName || "ゲストユーザー"}</p></div>
                             </div>
-                            <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2 text-left"><IconLogout /></button>
+                            <button onClick={onLogout} className="text-slate-300 hover:text-rose-500"><IconLogout /></button>
                         </div>
-                        <div className="space-y-6 text-slate-900 text-left">
-                            <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center font-sans">プロジェクト名</label>
-                                <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 font-sans" placeholder="例: LIVE練習" value={name} onChange={e => setName(e.target.value)} />
-                            </div>
+                        <div className="space-y-6 text-left">
+                            <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase">プロジェクト名</label><input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none" value={name} onChange={e=>setName(e.target.value)} placeholder="例: LIVE練習" /></div>
                             <div className="grid grid-cols-2 gap-3">
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">開始日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none font-sans" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">終了日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center focus:ring-2 focus:ring-indigo-500 outline-none font-sans" value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
+                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase">開始日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center" value={sDate} onChange={e=>setSDate(e.target.value)} /></div>
+                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase">終了日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center" value={eDate} onChange={e=>setEDate(e.target.value)} /></div>
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">目標人数</label>
-                                <div className="flex items-center justify-between gap-4 font-sans text-slate-900">
-                                    <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors text-slate-900">-</button>
-                                    <div className="text-center flex-1"><span className="text-4xl font-black tabular-nums text-slate-900 font-sans">{num}</span><span className="text-xs font-bold ml-1 text-slate-400 uppercase font-sans">人</span></div>
-                                    <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors text-slate-900 font-sans">+</button>
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase">目標人数</label>
+                                <div className="flex items-center justify-between gap-4">
+                                    <button onClick={()=>setNum(Math.max(1, num-1))} className="w-12 h-12 bg-slate-100 rounded-2xl text-xl font-black">-</button>
+                                    <div className="text-center flex-1 font-sans"><span className="text-4xl font-black">{num}</span><span className="text-xs font-bold ml-1 text-slate-400">人</span></div>
+                                    <button onClick={()=>setNum(num+1)} className="w-12 h-12 bg-slate-100 rounded-2xl text-xl font-black">+</button>
                                 </div>
                             </div>
-                            <button disabled={!name || new Date(startDate) > new Date(endDate)} onClick={() => onCreate(name, num, startDate, endDate)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all text-center text-white disabled:opacity-50 font-sans">
-                                調整カレンダーを作成
-                            </button>
+                            <button disabled={!name} onClick={()=>onCreate(name, num, sDate, eDate)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all text-center">カレンダーを作成</button>
                         </div>
                     </div>
                 </div>
             );
-        }
+        };
 
-        function JoinView({ bandName, userName, setUserName, onJoin, isJoining }) {
-            return (
-                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4 text-slate-900 text-left font-sans">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center">
-                        <h1 className="text-xl font-black mb-2 text-indigo-600 italic text-center text-indigo-600 font-sans">BandSync</h1>
-                        <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight text-center font-sans">{bandName}</p>
-                        <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4 text-slate-900 font-sans" placeholder="あなたの表示名" value={userName || ''} onChange={e => setUserName(e.target.value)} />
-                        <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center text-white font-sans">
-                            {isJoining ? "処理中..." : "カレンダーを表示"}
-                        </button>
-                    </div>
-                </div>
-            );
-        }
-
-        // --- メインコンポーネント ---
+        // --- メインアプリケーション ---
         function App() {
             const [user, setUser] = useState(null);
             const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -248,7 +219,7 @@
             const [userName, setUserName] = useState('');
             const [isJoined, setIsJoined] = useState(false);
             const [isJoining, setIsJoining] = useState(false);
-            const [viewStartDate, setViewStartDate] = useState(null);
+            const [viewStart, setViewStart] = useState(null);
             const [peekSlot, setPeekSlot] = useState(null);
             const [selectionStart, setSelectionStart] = useState(null);
             const [showMatchModal, setShowMatchModal] = useState(false);
@@ -257,7 +228,6 @@
             const longPressTimer = useRef(null);
             const isLongPressing = useRef(false);
 
-            // 認証状態の監視
             useEffect(() => {
                 const unsub = onAuthStateChanged(auth, (u) => {
                     setUser(u);
@@ -267,21 +237,21 @@
                 return () => unsub();
             }, [userName]);
 
-            // Firestoreデータ取得
             useEffect(() => {
                 if (!user || !sessionId) return;
-
                 const sessionRef = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', sessionId);
                 const unsubSession = onSnapshot(sessionRef, (snap) => {
                     if (snap.exists()) {
                         const data = snap.data();
                         setSessionData(data);
-                        // viewStartDateが未設定の場合のみ初期化
-                        if (!viewStartDate) setViewStartDate(new Date(data.startDate));
+                        if (!viewStart) setViewStart(new Date(data.startDate));
                     } else {
                         setError("セッションが見つかりませんでした。URLを確認してください。");
                     }
-                }, (err) => setError("データの読み取りに失敗しました。"));
+                }, (err) => {
+                    console.error(err);
+                    setError("通信エラーが発生しました。インターネット接続を確認してください。");
+                });
 
                 const availCol = collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability');
                 const unsubAvail = onSnapshot(availCol, (snap) => {
@@ -296,7 +266,7 @@
                     }
                 });
                 return () => { unsubSession(); unsubAvail(); };
-            }, [user, sessionId, viewStartDate]);
+            }, [user, sessionId, viewStart]);
 
             const loginWithGoogle = async () => {
                 const provider = new GoogleAuthProvider();
@@ -394,16 +364,16 @@
                 setPeekSlot(null); isLongPressing.current = false;
             };
 
-            if (error) return <ErrorView message={error} onRetry={() => { setError(null); window.location.reload(); }} />;
-            if (isAuthLoading) return <LoadingView />;
-            if (!user) return <AuthGate onGoogle={() => loginWithGoogle()} onAnon={() => signInAnonymously(auth)} />;
-            if (!sessionId) return <Landing onCreate={handleCreate} user={user} onLogout={handleLogout} />;
-            if (!sessionData || !viewStartDate) return <LoadingView />;
+            if (error) return <Error message={error} onRetry={() => window.location.reload()} />;
+            if (isAuthLoading) return <Loading />;
+            if (!user) return <Auth onGoogle={loginWithGoogle} onAnon={() => signInAnonymously(auth)} />;
+            if (!sessionId) return <Create onCreate={handleCreate} user={user} onLogout={handleLogout} />;
+            if (!sessionData || !viewStart) return <Loading />;
             if (!isJoined) return <JoinView bandName={sessionData.bandName} userName={userName} setUserName={setUserName} onJoin={handleJoin} isJoining={isJoining} />;
 
-            const weekDates = getWeekDatesWithinRange(viewStartDate, sessionData.startDate, sessionData.endDate);
-            const canGoPrev = viewStartDate > new Date(sessionData.startDate);
-            const canGoNext = (() => { const n = new Date(viewStartDate); n.setDate(n.getDate()+7); return n <= new Date(sessionData.endDate); })();
+            const weekDates = getWeekDatesWithinRange(viewStart, sessionData.startDate, sessionData.endDate);
+            const canGoPrev = viewStart > new Date(sessionData.startDate);
+            const canGoNext = (() => { const n = new Date(viewStart); n.setDate(n.getDate()+7); return n <= new Date(sessionData.endDate); })();
 
             return (
                 <div className="h-screen bg-white flex flex-col font-sans overflow-hidden relative text-slate-900">
@@ -415,29 +385,29 @@
                         <div className="flex gap-1.5">
                             <button onClick={() => setShowMatchModal(true)} className="p-2.5 bg-emerald-50 text-emerald-500 rounded-xl hover:bg-emerald-100 relative"><IconCircleOK />{matchedRanges.length > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white">{matchedRanges.length}</div>}</button>
                             <button onClick={() => setShowStudioModal(true)} className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100"><IconSuta /></button>
-                            <button onClick={() => { const t = document.createElement('textarea'); t.value = window.location.origin + window.location.pathname + '?s=' + sessionId; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); alert('URLをコピーしました！'); }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100"><IconCopy /></button>
+                            <button onClick={() => { const t = document.createElement('textarea'); t.value = window.location.origin + window.location.pathname + '?s=' + sessionId; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); alert('URLをコピーしました！'); }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 font-sans"><IconCopy /></button>
                             <button onClick={handleLogout} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500"><IconLogout /></button>
                         </div>
                     </header>
 
                     <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0 font-sans">
-                        <button disabled={!canGoPrev} onClick={() => { const n = new Date(viewStartDate); n.setDate(n.getDate()-7); setViewStartDate(n); }} className={`text-xs font-black p-1 ${!canGoPrev ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>← 前週</button>
-                        <span className="font-black text-sm text-slate-700">{viewStartDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
-                        <button disabled={!canGoNext} onClick={() => { const n = new Date(viewStartDate); n.setDate(n.getDate()+7); setViewStartDate(n); }} className={`text-xs font-black p-1 ${!canGoNext ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>次週 →</button>
+                        <button disabled={!canGoPrev} onClick={() => { const n = new Date(viewStart); n.setDate(n.getDate()-7); setViewStart(n); }} className={`text-xs font-black p-1 ${!canGoPrev ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>← 前週</button>
+                        <span className="font-black text-sm text-slate-700">{viewStart.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
+                        <button disabled={!canGoNext} onClick={() => { const n = new Date(viewStart); n.setDate(n.getDate()+7); setViewStart(n); }} className={`text-xs font-black p-1 ${!canGoNext ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>次週 →</button>
                     </div>
 
-                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-10 bg-white font-sans">
-                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm text-center font-sans">
+                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-10 bg-white">
+                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm text-center">
                             <div className="w-12 shrink-0 border-r bg-slate-50"></div>
                             {weekDates.map((d, i) => (
-                                <div key={i} className="flex-1 py-2 border-r last:border-r-0 font-sans"><div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div><div className="font-black text-sm text-slate-700 font-sans">{d.getDate()}</div></div>
+                                <div key={i} className="flex-1 py-2 border-r last:border-r-0 font-sans font-sans"><div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div><div className="font-black text-sm text-slate-700">{d.getDate()}</div></div>
                             ))}
                             {Array.from({ length: 7 - weekDates.length }).map((_, i) => <div key={'e-'+i} className="flex-1 bg-slate-50/50 border-r last:border-r-0"></div>)}
                         </div>
 
                         <div className="flex w-full relative">
                             <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black text-center">{Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100 font-sans">{START_HOUR + h}:00</div>)}</div>
-                            <div className="flex-1 flex font-sans">
+                            <div className="flex-1 flex">
                                 {weekDates.map((d, dayIdx) => {
                                     const ds = formatDate(d);
                                     return (
@@ -449,12 +419,12 @@
                                                 let cellBg = isFull ? '#ef4444' : count > 0 ? `rgba(67, 56, 202, ${0.25 + (count/sessionData.memberCount * 0.7)})` : 'transparent';
                                                 return (
                                                     <div key={sIdx} onPointerDown={() => onSlotPointerDown(key)} onPointerUp={() => onSlotPointerUp(key, ds, sIdx)} onPointerLeave={() => setPeekSlot(null)} style={{ backgroundColor: cellBg }} className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition select-none ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''} ${isPeeking ? 'z-50' : ''} ${isSStart ? 'selection-active' : ''}`}>
-                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none font-sans font-sans"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
-                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
+                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
+                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white font-sans' : 'text-indigo-900/40 font-sans'}`}>{count}</div>}
                                                         {isPeeking && participants.length > 0 && (
-                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white/98 backdrop-blur shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none text-left font-sans">
+                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white/98 backdrop-blur shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none text-left font-sans font-sans">
                                                                 {participants.map((p) => (
-                                                                    <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center">{p.photoURL ? <img src={p.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-black text-indigo-600 uppercase font-sans font-sans">{p.name?.charAt(0) || '?'}</span>}</div>
+                                                                    <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center">{p.photoURL ? <img src={p.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-black text-indigo-600 uppercase">{p.name?.charAt(0) || '?'}</span>}</div>
                                                                 ))}
                                                             </div>
                                                         )}
@@ -471,40 +441,40 @@
                     {/* Modals */}
                     {showMatchModal && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm font-sans" onClick={() => setShowMatchModal(false)}></div>
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMatchModal(false)}></div>
                             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans">
-                                <div className="flex justify-between items-center mb-6 text-emerald-500 font-sans"><div className="flex items-center gap-2 font-sans"><IconCircleOK /><h2 className="text-xl font-black italic tracking-tighter">全員OKの時間</h2></div><button onClick={() => setShowMatchModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 font-sans font-sans">
+                                <div className="flex justify-between items-center mb-6 text-emerald-500 font-sans font-sans font-sans font-sans"><div className="flex items-center gap-2"><IconCircleOK /><h2 className="text-xl font-black italic tracking-tighter">全員OKの時間</h2></div><button onClick={() => setShowMatchModal(false)} className="text-slate-300 hover:text-slate-500 p-2"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 font-sans">
                                     {matchedRanges.length > 0 ? matchedRanges.map((m, idx) => {
                                         const sH = START_HOUR + Math.floor(m.start / 2); const sM = m.start % 2 === 0 ? "00" : "30";
                                         const eH = START_HOUR + Math.floor((m.end + 1) / 2); const eM = (m.end + 1) % 2 === 0 ? "00" : "30";
                                         return (
-                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100 group hover:border-emerald-200 transition-all font-sans font-sans font-sans"><div className="font-black text-slate-800 text-sm font-sans">{`${m.date.getMonth() + 1}/${m.date.getDate()}(${DAYS_OF_WEEK[m.date.getDay()]})`}</div><div className="bg-white px-3 py-1 rounded-full text-xs font-black text-emerald-500 shadow-sm font-sans font-sans font-sans">{sH}:{sM} 〜 {eH}:{eM}</div></div>
+                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100 group hover:border-emerald-200 transition-all font-sans font-sans font-sans"><div className="font-black text-slate-800 text-sm font-sans">{`${m.date.getMonth() + 1}/${m.date.getDate()}(${DAYS_OF_WEEK[m.date.getDay()]})`}</div><div className="bg-white px-3 py-1 rounded-full text-xs font-black text-emerald-500 shadow-sm font-sans">{sH}:{sM} 〜 {eH}:{eM}</div></div>
                                         );
-                                    }) : <div className="py-12 text-center text-slate-300 font-sans font-sans font-sans font-sans font-sans">全員が集まれる時間は<br/>まだありません</div>}
+                                    }) : <div className="py-12 text-center text-slate-300 font-sans">全員が集まれる時間は<br/>まだありません</div>}
                                 </div>
-                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans font-sans">Powered by BandSync</p>
+                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans">Powered by BandSync</p>
                             </div>
                         </div>
                     )}
 
                     {showStudioModal && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm font-sans font-sans" onClick={() => setShowStudioModal(false)}></div>
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowStudioModal(false)}></div>
                             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans">
-                                <div className="flex justify-between items-center mb-6 text-amber-500 font-sans"><div className="flex items-center gap-2 font-sans font-sans font-sans"><div className="bg-amber-100 px-2 py-1 rounded-lg text-[10px] font-black font-sans font-sans">スタ</div><h2 className="text-xl font-black italic tracking-tighter">Studio Booking</h2></div><button onClick={() => setShowStudioModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 font-sans font-sans font-sans">
+                                <div className="flex justify-between items-center mb-6 text-amber-500 font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans"><div className="flex items-center gap-2"><div className="bg-amber-100 px-2 py-1 rounded-lg text-[10px] font-black">スタ</div><h2 className="text-xl font-black italic tracking-tighter">Studio Booking</h2></div><button onClick={() => setShowStudioModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 font-sans">
                                     {[
                                         { name: 'ゲートウェイ高田馬場3号店', url: 'http://www.gw-studio.com/studios/studio_baba3rd/index' },
                                         { name: 'バズーカスタジオ高田馬場', url: 'https://bazookastudio.com/' },
                                         { name: 'BASS ON TOP高田馬場', url: 'https://www.bassontop.co.jp/band/takadanobaba/' }
                                     ].map(s => (
-                                        <a key={s.url} href={s.url} target="_blank" className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group font-sans font-sans">
-                                            <div className="text-left font-sans font-sans font-sans"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 font-sans font-sans font-sans font-sans font-sans">Takadanobaba</div><div className="font-black text-slate-700 text-sm font-sans font-sans">{s.name}</div></div><div className="text-slate-300 group-hover:text-amber-500 font-sans font-sans font-sans font-sans font-sans"><IconExternal /></div>
+                                        <a key={s.url} href={s.url} target="_blank" className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group">
+                                            <div className="text-left font-sans"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Takadanobaba</div><div className="font-black text-slate-700 text-sm font-sans">{s.name}</div></div><div className="text-slate-300 group-hover:text-amber-500 font-sans font-sans"><IconExternal /></div>
                                         </a>
                                     ))}
                                 </div>
-                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans font-sans font-sans font-sans font-sans">Powered by BandSync</p>
+                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans">Powered by BandSync</p>
                             </div>
                         </div>
                     )}
