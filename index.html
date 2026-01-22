@@ -48,22 +48,20 @@
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- Firebase Configuration ---
-        // ※GitHubに公開する際は、ご自身のFirebaseプロジェクトの設定をここに正しく貼り付けてください。
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
-                authDomain: "bandschedule-98f2c.firebaseapp.com",
-                projectId: "bandschedule-98f2c",
-                storageBucket: "bandschedule-98f2c.firebasestorage.app",
-                messagingSenderId: "1017107663135",
-                appId: "1:1017107663135:web:54771b17cd463b32af482a"
-            };
+        // ※必ずご自身のFirebaseプロジェクトの設定に書き換えてください
+        const firebaseConfig = {
+            apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
+            authDomain: "bandschedule-98f2c.firebaseapp.com",
+            projectId: "bandschedule-98f2c",
+            storageBucket: "bandschedule-98f2c.firebasestorage.app",
+            messagingSenderId: "1017107663135",
+            appId: "1:1017107663135:web:54771b17cd463b32af482a"
+        };
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'band-sync-v4-final';
+        const appId = "band-sync-v5-final"; // アプリの識別子
 
         // --- Constants ---
         const START_HOUR = 8;
@@ -128,7 +126,7 @@
                     else setError("セッションが見つかりません。");
                 }, (err) => {
                     console.error("Session Error:", err);
-                    setError("データの読み取りに失敗しました。プロジェクトの設定を確認してください。");
+                    setError("データの読み込み権限がありません。");
                 });
 
                 const availCol = collection(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability');
@@ -150,14 +148,8 @@
                     setError(null);
                     await signInWithPopup(auth, provider);
                 } catch (e) {
-                    console.error("Google Login Error:", e);
-                    if (e.code === 'auth/unauthorized-domain') {
-                        setError("このドメインはFirebaseコンソールで許可されていません。'Authorized domains'の設定を確認してください。");
-                    } else if (e.code === 'auth/popup-blocked') {
-                        setError("ポップアップがブロックされました。ブラウザの設定で許可してください。");
-                    } else {
-                        setError(`ログイン失敗: ${e.message}`);
-                    }
+                    console.error("Login error:", e);
+                    setError(`ログインエラー: ${e.message}`);
                 }
             };
 
@@ -167,6 +159,13 @@
                     await signInAnonymously(auth); 
                 } catch (e) { 
                     setError("匿名ログインに失敗しました。"); 
+                }
+            };
+
+            const handleLogout = async () => {
+                if (confirm("ログアウトしますか？")) {
+                    await signOut(auth);
+                    window.location.reload();
                 }
             };
 
@@ -180,7 +179,6 @@
                 try {
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id), data);
                     setSessionId(id);
-                    // URLを書き換え（リロード対策）
                     const url = new URL(window.location.href);
                     url.searchParams.set('s', id);
                     window.history.pushState({}, '', url);
@@ -237,54 +235,57 @@
                 return map;
             }, [availabilities]);
 
-            // 表示制御
             if (error) return <ErrorView message={error} onRetry={() => setError(null)} />;
             if (isAuthLoading) return <LoadingView />;
             
-            // 未ログイン時はログイン画面（Google or 匿名）を表示
-            if (!user) return <AuthGate onGoogle={loginWithGoogle} onAnon={loginAnonymously} />;
-            
-            // セッションIDがない場合は新規作成画面
-            if (!sessionId) return <Landing onCreate={handleCreate} user={user} />;
-            
-            // データ取得待ち
+            // ログインしていない、または匿名でかつ名前も決まっていない場合はログイン画面
+            if (!user) {
+                return <AuthGate onGoogle={loginWithGoogle} onAnon={loginAnonymously} />;
+            }
+
+            // セッションIDがない場合：プロジェクト作成
+            if (!sessionId) {
+                return <Landing onCreate={handleCreate} user={user} onGoogleLogin={loginWithGoogle} onLogout={handleLogout} />;
+            }
+
             if (!sessionData) return <LoadingView />;
 
-            // 参加していない場合は名前入力画面
-            if (!isJoined) return (
-                <JoinView 
-                    bandName={sessionData.bandName} 
-                    userName={userName || user.displayName || ''} 
-                    setUserName={setUserName} 
-                    onJoin={handleJoin} 
-                />
-            );
+            // 参加確認（名前入力）
+            if (!isJoined) {
+                return (
+                    <JoinView 
+                        bandName={sessionData.bandName} 
+                        userName={userName || user.displayName || ''} 
+                        setUserName={setUserName} 
+                        onJoin={handleJoin}
+                        user={user}
+                        onGoogleLogin={loginWithGoogle}
+                    />
+                );
+            }
 
             const weekDates = getWeekDates(viewStartDate);
             const activeParticipants = activeDetailSlot ? (slotDetails[activeDetailSlot] || []) : [];
 
             return (
                 <div className="min-h-screen bg-white flex flex-col font-sans max-h-screen overflow-hidden relative">
-                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-40 shrink-0">
+                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-40 shrink-0 shadow-sm">
                         <div className="min-w-0">
                             <div className="font-black text-lg text-indigo-600 truncate leading-tight">{sessionData.bandName}</div>
-                            <div className="text-[10px] text-slate-400 font-bold flex items-center gap-2">
-                                <span>目標: {sessionData.memberCount}人</span>
-                                <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                                <span>現在: {Object.keys(availabilities).length}人</span>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                                <span>目標: <span className="text-slate-600">{sessionData.memberCount}人</span></span>
+                                <span>参加: <span className="text-indigo-600">{Object.keys(availabilities).length}人</span></span>
                             </div>
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => {
                                 const url = window.location.href.split('?')[0] + '?s=' + sessionId;
-                                const t = document.createElement('textarea');
-                                t.value = url; document.body.appendChild(t); t.select();
-                                document.execCommand('copy'); document.body.removeChild(t);
+                                navigator.clipboard.writeText(url);
                                 alert('共有URLをコピーしました！');
                             }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors">
                                 <IconCopy />
                             </button>
-                            <button onClick={() => { if(confirm("ログアウトしますか？")) signOut(auth); }} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-colors">
+                            <button onClick={handleLogout} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-colors">
                                 <IconLogout />
                             </button>
                         </div>
@@ -327,17 +328,20 @@
                                                 const isActive = activeDetailSlot === key;
                                                 
                                                 let cellBg = 'transparent';
-                                                if (isFull) cellBg = '#ef4444'; 
-                                                else if (count > 0) {
-                                                    const ratio = count / sessionData.memberCount;
-                                                    const opacity = 0.25 + (ratio * 0.7); 
+                                                if (isFull) {
+                                                    cellBg = '#ef4444'; 
+                                                } else if (count > 0) {
+                                                    const steps = Math.min(count, sessionData.memberCount - 1);
+                                                    const opacity = 0.25 + (steps * (0.6 / (sessionData.memberCount - 1)));
                                                     cellBg = `rgba(67, 56, 202, ${opacity})`; 
                                                 }
 
                                                 return (
                                                     <div key={sIdx} onClick={() => handleSlotClick(ds, sIdx)}
                                                         style={{ backgroundColor: cellBg }}
-                                                        className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition hover:opacity-80 ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''} ${isActive ? 'ring-2 ring-indigo-500 z-10' : ''}`}>
+                                                        className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition hover:opacity-80 
+                                                            ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''}
+                                                            ${isActive ? 'ring-2 ring-indigo-500 z-10' : ''}`}>
                                                         {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
                                                         {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
                                                     </div>
@@ -350,14 +354,13 @@
                         </div>
                     </div>
 
-                    {/* 詳細ポップアップ */}
                     {activeDetailSlot && (
                         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/95 backdrop-blur-md shadow-2xl rounded-3xl p-4 border border-slate-200 z-50 animate-slide-up">
-                            <div className="flex justify-between items-center mb-3">
+                            <div className="flex justify-between items-center mb-3 text-slate-900">
                                 <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
                                     <IconUsers /> {activeDetailSlot.split(':')[0]} {START_HOUR + Math.floor(activeDetailSlot.split(':')[1] / 2)}:{activeDetailSlot.split(':')[1] % 2 === 0 ? '00' : '30'}
                                 </div>
-                                <button onClick={() => setActiveDetailSlot(null)} className="text-slate-400 hover:text-slate-600 p-1">
+                                <button onClick={() => setActiveDetailSlot(null)} className="text-slate-400 p-1">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                                 </button>
                             </div>
@@ -384,31 +387,45 @@
                         <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl">B</div>
                         <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight">BandSync</h1>
                         <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed">練習日程をみんなで共有しよう</p>
-                        <div className="space-y-3">
-                            <button onClick={onGoogle} className="w-full py-4 bg-white border-2 border-slate-100 rounded-2xl font-black flex items-center justify-center hover:bg-slate-50 transition-all text-sm">
+                        <div className="space-y-4">
+                            <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm border-2 border-indigo-600">
                                 <IconGoogle /> Googleアカウントでログイン
                             </button>
                             <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3">または</div>
-                            <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all">名前だけで始める（匿名）</button>
+                            <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all border-2 border-transparent">名前だけで始める（匿名）</button>
                         </div>
-                        <p className="mt-8 text-[9px] text-slate-400 leading-relaxed px-4">※Googleログインを使うと、他のスマホやPCからアクセスしても自分の予定を管理できます。</p>
                     </div>
                 </div>
             );
         }
 
-        function Landing({ onCreate, user }) {
+        function Landing({ onCreate, user, onGoogleLogin, onLogout }) {
             const [name, setName] = useState('');
             const [num, setNum] = useState(4);
+            const isAnon = user.isAnonymous;
+
             return (
                 <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white">
                     <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
-                        <div className="flex items-center gap-3 mb-8 border-b pb-6 text-left">
-                            {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">HELLO!</p>
-                                <p className="font-black text-sm truncate w-40">{user.displayName || "ログイン済み"}</p>
+                        {isAnon && (
+                            <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-center">
+                                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">ゲストとしてログイン中</p>
+                                <button onClick={onGoogleLogin} className="w-full py-2 bg-white border border-amber-200 text-amber-700 text-[10px] font-black rounded-lg hover:bg-amber-100 transition-all flex items-center justify-center">
+                                    <IconGoogle /> Googleログインに切り替える
+                                </button>
                             </div>
+                        )}
+                        <div className="flex items-center justify-between mb-8 border-b pb-6 text-left">
+                            <div className="flex items-center gap-3">
+                                {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-sm" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
+                                <div>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">{isAnon ? "GUEST" : "LOGGED IN"}</p>
+                                    <p className="font-black text-sm truncate w-32">{user.displayName || "ゲストユーザー"}</p>
+                                </div>
+                            </div>
+                            <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors">
+                                <IconLogout />
+                            </button>
                         </div>
                         <div className="space-y-8 text-center">
                             <div>
@@ -416,7 +433,7 @@
                                 <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: BABA-LIVE" value={name} onChange={e => setName(e.target.value)} />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">目標人数 (全員揃うと赤くなります)</label>
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">目標人数</label>
                                 <div className="flex items-center justify-between gap-4">
                                     <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">-</button>
                                     <div className="text-center flex-1">
@@ -426,21 +443,30 @@
                                     <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">+</button>
                                 </div>
                             </div>
-                            <button disabled={!name} onClick={() => onCreate(name, num)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-30">調整カレンダーを作成</button>
+                            <button disabled={!name} onClick={() => onCreate(name, num)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">調整カレンダーを作成</button>
                         </div>
                     </div>
                 </div>
             );
         }
 
-        function JoinView({ bandName, userName, setUserName, onJoin }) {
+        function JoinView({ bandName, userName, setUserName, onJoin, user, onGoogleLogin }) {
+            const isAnon = user.isAnonymous;
             return (
-                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center text-slate-900">
+                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4 text-slate-900">
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center">
+                        {isAnon && (
+                            <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100 text-center">
+                                <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-2">ゲスト参加中</p>
+                                <button onClick={onGoogleLogin} className="w-full py-2 bg-white border border-amber-200 text-amber-700 text-[10px] font-black rounded-lg hover:bg-amber-100 transition-all flex items-center justify-center">
+                                    <IconGoogle /> Googleでログインし直す
+                                </button>
+                            </div>
+                        )}
                         <h1 className="text-xl font-black mb-2 text-indigo-600 italic">BandSync</h1>
                         <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight">{bandName}</p>
                         <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4" placeholder="あなたの表示名" value={userName} onChange={e => setUserName(e.target.value)} />
-                        <button onClick={onJoin} disabled={!userName.trim()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all">予定を入力する</button>
+                        <button onClick={onJoin} disabled={!userName.trim()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all">参加する</button>
                     </div>
                 </div>
             );
@@ -449,11 +475,11 @@
         function LoadingView() { return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse italic uppercase tracking-tighter">LOADING...</div>; }
         function ErrorView({ message, onRetry }) {
             return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-center">
+                <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-center text-slate-900">
                     <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full">
-                        <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic text-center">ERROR</h1>
-                        <p className="text-sm text-slate-600 mb-6 leading-relaxed text-center">{message}</p>
-                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-colors">リトライ / 閉じる</button>
+                        <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic">ERROR</h1>
+                        <p className="text-sm text-slate-600 mb-6 leading-relaxed">{message}</p>
+                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700">リトライ</button>
                     </div>
                 </div>
             );
