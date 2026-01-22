@@ -23,9 +23,6 @@
             100% { transform: scale(1) translateY(0); opacity: 1; }
         }
         .animate-pop-in { animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-        
-        /* 長押し中の視覚フィードバック */
-        .pressing { transform: scale(0.95); filter: brightness(0.9); }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
@@ -39,7 +36,6 @@
         import { 
             getAuth, 
             signInAnonymously, 
-            signInWithCustomToken,
             onAuthStateChanged, 
             GoogleAuthProvider, 
             signInWithPopup,
@@ -55,7 +51,7 @@
             updateDoc 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- Firebase Configuration ---
+        // --- Configuration ---
         const firebaseConfig = {
             apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
             authDomain: "bandschedule-98f2c.firebaseapp.com",
@@ -68,23 +64,22 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appIdPrefix = 'band-sync-prod-v12'; 
+        const appIdPrefix = 'band-sync-v13-free'; 
 
-        // --- Global Constants ---
+        // --- 定数 ---
         const START_HOUR = 8;
         const END_HOUR = 23;
         const SLOTS_PER_HOUR = 2; 
         const TOTAL_SLOTS = (END_HOUR - START_HOUR + 1) * SLOTS_PER_HOUR; 
         const DAYS_OF_WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
-        // --- Global Helpers ---
+        // --- ヘルパー ---
         const formatDate = (date) => {
             const y = date.getFullYear();
             const m = (date.getMonth() + 1).toString().padStart(2, '0');
             const d = date.getDate().toString().padStart(2, '0');
             return `${y}-${m}-${d}`;
         };
-
         const getWeekDates = (startDate) => {
             const dates = [];
             const base = new Date(startDate);
@@ -95,28 +90,28 @@
             }
             return dates;
         };
-
         const generateId = () => Math.random().toString(36).substring(2, 11);
 
-        // --- Icons ---
+        // --- アイコン ---
         const IconGoogle = () => <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>;
         const IconCopy = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
         const IconLogout = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
+        const IconExternal = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
 
         // --- Sub-Components ---
 
         function AuthGate({ onGoogle, onAnon }) {
             return (
-                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center">
+                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center font-sans">
                     <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
                         <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl shadow-indigo-100">B</div>
                         <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight">BandSync</h1>
                         <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed">練習日程をみんなで共有しよう</p>
                         <div className="space-y-4">
-                            <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm">
+                            <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm text-white">
                                 <IconGoogle /> Googleアカウントでログイン
                             </button>
-                            <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3">または</div>
+                            <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3 text-center">または</div>
                             <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all">名前だけで始める（匿名）</button>
                         </div>
                     </div>
@@ -129,43 +124,35 @@
             const [num, setNum] = useState(4);
             const isAnon = user.isAnonymous;
             return (
-                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white">
-                    <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl text-center">
-                        {isAnon && (
-                            <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 leading-none">ゲスト参加中</p>
-                                <button onClick={onGoogleLogin} className="w-full py-2 bg-white border border-amber-200 text-amber-700 text-[10px] font-black rounded-lg hover:bg-amber-100 flex items-center justify-center">
-                                    <IconGoogle /> Googleログインに切り替える
-                                </button>
-                            </div>
-                        )}
-                        <div className="flex items-center justify-between mb-8 border-b pb-6 text-left">
+                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white font-sans text-center">
+                    <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
+                        <div className="flex items-center justify-between mb-8 border-b pb-6 text-left text-slate-900">
                             <div className="flex items-center gap-3">
                                 {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-sm" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
                                 <div>
                                     <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">{isAnon ? "GUEST" : "LOGGED IN"}</p>
-                                    <p className="font-black text-sm truncate w-32 text-slate-900">{user.displayName || "ゲストユーザー"}</p>
+                                    <p className="font-black text-sm truncate w-32">{user.displayName || "ゲストユーザー"}</p>
                                 </div>
                             </div>
-                            <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2"><IconLogout /></button>
+                            <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2 text-left"><IconLogout /></button>
                         </div>
                         <div className="space-y-8 text-slate-900">
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">プロジェクト名 / バンド名</label>
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">プロジェクト名 / バンド名</label>
                                 <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: BABA-LIVE" value={name} onChange={e => setName(e.target.value)} />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">目標人数</label>
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">目標人数</label>
                                 <div className="flex items-center justify-between gap-4">
-                                    <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">-</button>
+                                    <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors text-center">-</button>
                                     <div className="text-center flex-1">
                                         <span className="text-4xl font-black tabular-nums">{num}</span>
                                         <span className="text-xs font-bold ml-1 text-slate-400 uppercase">人</span>
                                     </div>
-                                    <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">+</button>
+                                    <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors text-center">+</button>
                                 </div>
                             </div>
-                            <button disabled={!name} onClick={() => onCreate(name, num)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">調整カレンダーを作成</button>
+                            <button disabled={!name} onClick={() => onCreate(name, num)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all text-center">調整カレンダーを作成</button>
                         </div>
                     </div>
                 </div>
@@ -173,27 +160,18 @@
         }
 
         function JoinView({ bandName, userName, setUserName, onJoin, user, onGoogleLogin, isJoining }) {
-            const isAnon = user.isAnonymous;
             return (
-                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4 text-slate-900">
+                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4 text-slate-900 text-left font-sans">
                     <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center">
-                        {isAnon && (
-                            <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-                                <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-2 leading-none">ゲスト参加中</p>
-                                <button onClick={onGoogleLogin} className="w-full py-2 bg-white border border-amber-200 text-amber-700 text-[10px] font-black rounded-lg hover:bg-amber-100 flex items-center justify-center">
-                                    <IconGoogle /> Googleでログインし直す
-                                </button>
-                            </div>
-                        )}
-                        <h1 className="text-xl font-black mb-2 text-indigo-600 italic">BandSync</h1>
-                        <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight">{bandName}</p>
+                        <h1 className="text-xl font-black mb-2 text-indigo-600 italic text-center">BandSync</h1>
+                        <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight text-center">{bandName}</p>
                         <input 
-                            className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4" 
+                            className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4 text-slate-900" 
                             placeholder="あなたの表示名" 
                             value={userName || ''} 
                             onChange={e => setUserName(e.target.value)} 
                         />
-                        <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50">
+                        <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center">
                             {isJoining ? "処理中..." : "カレンダーを表示"}
                         </button>
                     </div>
@@ -201,21 +179,21 @@
             );
         }
 
-        function LoadingView() { return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse italic uppercase tracking-tighter text-center">LOADING...</div>; }
+        function LoadingView() { return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse italic uppercase tracking-tighter text-center font-sans">LOADING...</div>; }
         
         function ErrorView({ message, onRetry }) {
             return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-center text-slate-900">
-                    <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full text-center">
-                        <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic">ERROR</h1>
+                <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-center text-slate-900 font-sans text-center">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full">
+                        <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic text-center">ERROR</h1>
                         <p className="text-sm text-slate-600 mb-6 leading-relaxed text-center whitespace-pre-wrap">{message}</p>
-                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-all">リトライ</button>
+                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-all text-center">やり直す</button>
                     </div>
                 </div>
             );
         }
 
-        // --- Main App ---
+        // --- Main App Component ---
 
         function App() {
             const [user, setUser] = useState(null);
@@ -229,31 +207,32 @@
             const [isJoining, setIsJoining] = useState(false);
             const [viewStartDate, setViewStartDate] = useState(new Date());
             const [selectionStart, setSelectionStart] = useState(null);
-            
-            // --- ポップアップ表示用のステート ---
             const [peekSlot, setPeekSlot] = useState(null);
+            
             const longPressTimer = useRef(null);
             const isLongPressing = useRef(false);
 
+            // --- 認証監視 ---
             useEffect(() => {
                 const unsub = onAuthStateChanged(auth, (u) => {
                     setUser(u);
                     setIsAuthLoading(false);
-                    if (u && !userName) setUserName(u.displayName || '');
+                    if (u && !userName) {
+                        setUserName(u.displayName || '');
+                    }
                 });
                 return () => unsub();
             }, [userName]);
 
+            // --- Firestoreデータ購読 ---
             useEffect(() => {
                 if (!user || !sessionId) return;
+
                 const sessionRef = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', sessionId);
                 const unsubSession = onSnapshot(sessionRef, (snap) => {
                     if (snap.exists()) setSessionData(snap.data());
-                    else setError("セッションが見つかりません。");
-                }, (err) => {
-                    console.error(err);
-                    setError("データの読み取りに失敗しました。");
-                });
+                    else setError("セッションが見つかりませんでした。リンクが正しいか確認してください。");
+                }, (err) => console.error(err));
 
                 const availCol = collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability');
                 const unsubAvail = onSnapshot(availCol, (snap) => {
@@ -261,12 +240,14 @@
                     snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
                     const filtered = docs.filter(item => item.sessionId === sessionId);
                     setAllAvailability(filtered);
+                    
                     const me = filtered.find(item => item.uid === user.uid);
                     if (me) {
                         setIsJoined(true);
                         setUserName(me.name);
                     }
                 });
+
                 return () => { unsubSession(); unsubAvail(); };
             }, [user, sessionId]);
 
@@ -311,47 +292,30 @@
                     const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
                     const myExistingData = allAvailability.find(a => a.uid === user.uid);
                     await setDoc(ref, { 
-                        sessionId, uid: user.uid, name: userName.trim(), 
-                        slots: myExistingData?.slots || [], photoURL: user.photoURL || null, lastUpdated: Date.now()
+                        sessionId,
+                        uid: user.uid,
+                        name: userName.trim(), 
+                        slots: myExistingData?.slots || [],
+                        photoURL: user.photoURL || null,
+                        lastUpdated: Date.now()
                     }, { merge: true });
+                    
                     setIsJoined(true);
-                } catch (e) { setError(`参加失敗: ${e.message}`); } finally { setIsJoining(false); }
-            };
-
-            // --- 長押し・クリック処理の統合 ---
-            const onSlotPointerDown = (key, ds, sIdx) => {
-                isLongPressing.current = false;
-                longPressTimer.current = setTimeout(() => {
-                    isLongPressing.current = true;
-                    setPeekSlot(key);
-                }, 500); // 0.5秒で長押し判定
-            };
-
-            const onSlotPointerUp = (key, ds, sIdx) => {
-                clearTimeout(longPressTimer.current);
-                if (isLongPressing.current) {
-                    // 長押し終了時はポップアップを消す
-                    setPeekSlot(null);
-                } else {
-                    // 単なるクリック時
-                    handleSlotClick(ds, sIdx);
+                } catch (e) { 
+                    console.error(e);
+                    setError(`参加に失敗しました。Firestoreの書き込み権限を確認してください。`); 
+                } finally {
+                    setIsJoining(false);
                 }
-                isLongPressing.current = false;
-            };
-
-            const onSlotPointerLeave = () => {
-                clearTimeout(longPressTimer.current);
-                setPeekSlot(null);
-                isLongPressing.current = false;
             };
 
             const handleSlotClick = async (dateStr, slotIdx) => {
                 if (!isJoined || !user || !sessionId) return;
+                const key = `${dateStr}:${slotIdx}`;
                 const docId = `${sessionId}_${user.uid}`;
                 const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
                 const myData = allAvailability.find(a => a.uid === user.uid);
                 const myCurrentSlots = myData?.slots || [];
-                const key = `${dateStr}:${slotIdx}`;
                 const amISelected = myCurrentSlots.includes(key);
 
                 let nextSlots;
@@ -369,6 +333,23 @@
                 try { await updateDoc(ref, { slots: nextSlots }); } catch (e) {}
             };
 
+            const onSlotPointerDown = (key) => {
+                isLongPressing.current = false;
+                longPressTimer.current = setTimeout(() => {
+                    isLongPressing.current = true;
+                    setPeekSlot(key);
+                }, 400); // 0.4秒
+            };
+
+            const onSlotPointerUp = (key, ds, sIdx) => {
+                clearTimeout(longPressTimer.current);
+                if (!isLongPressing.current) {
+                    handleSlotClick(ds, sIdx);
+                }
+                setPeekSlot(null);
+                isLongPressing.current = false;
+            };
+
             const slotDetails = useMemo(() => {
                 const map = {};
                 allAvailability.forEach(data => {
@@ -383,6 +364,7 @@
             if (error) return <ErrorView message={error} onRetry={() => { setError(null); window.location.reload(); }} />;
             if (isAuthLoading) return <LoadingView />;
             if (!user) return <AuthGate onGoogle={loginWithGoogle} onAnon={loginAnonymously} />;
+            
             if (!sessionId) return <Landing onCreate={handleCreate} user={user} onGoogleLogin={loginWithGoogle} onLogout={handleLogout} />;
             if (!sessionData) return <LoadingView />;
 
@@ -402,10 +384,10 @@
 
             return (
                 <div className="min-h-screen bg-white flex flex-col font-sans max-h-screen overflow-hidden relative text-slate-900">
-                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-40 shrink-0 shadow-sm">
-                        <div className="min-w-0 text-left">
+                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-40 shrink-0 shadow-sm text-left">
+                        <div className="min-w-0">
                             <div className="font-black text-lg text-indigo-600 truncate leading-tight">{sessionData.bandName}</div>
-                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2 text-left">
                                 <span>目標: <span className="text-slate-600">{sessionData.memberCount}人</span></span>
                                 <span>現在: <span className="text-indigo-600">{allAvailability.length}人</span></span>
                             </div>
@@ -426,15 +408,15 @@
 
                     <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0">
                         <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() - 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400 p-1">← 前週</button>
-                        <span className="font-black text-sm text-slate-700">{viewStartDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
+                        <span className="font-black text-sm text-slate-700 text-center">{viewStartDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
                         <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() + 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400 p-1">次週 →</button>
                     </div>
 
-                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-24 text-left">
-                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm">
+                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-32 text-left bg-white">
+                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm text-center">
                             <div className="w-12 shrink-0 border-r bg-slate-50"></div>
                             {weekDates.map((d, i) => (
-                                <div key={i} className="flex-1 py-2 text-center border-r last:border-r-0">
+                                <div key={i} className="flex-1 py-2 border-r last:border-r-0">
                                     <div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div>
                                     <div className="font-black text-sm text-slate-700">{d.getDate()}</div>
                                 </div>
@@ -442,8 +424,8 @@
                         </div>
 
                         <div className="flex w-full relative">
-                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black">
-                                {Array.from({ length: 23 - 8 + 1 }).map((_, h) => (
+                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black text-center">
+                                {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => (
                                     <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100">{START_HOUR + h}:00</div>
                                 ))}
                             </div>
@@ -471,9 +453,9 @@
                                                 return (
                                                     <div 
                                                         key={sIdx} 
-                                                        onPointerDown={() => onSlotPointerDown(key, ds, sIdx)}
+                                                        onPointerDown={() => onSlotPointerDown(key)}
                                                         onPointerUp={() => onSlotPointerUp(key, ds, sIdx)}
-                                                        onPointerLeave={onSlotPointerLeave}
+                                                        onPointerLeave={() => setPeekSlot(null)}
                                                         style={{ backgroundColor: cellBg }}
                                                         className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition select-none 
                                                             ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''}
@@ -483,15 +465,15 @@
                                                         {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
                                                         {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
                                                         
-                                                        {/* --- 長押し時のみ表示されるアイコンリスト --- */}
+                                                        {/* 長押し時のアイコンポップアップ */}
                                                         {isPeeking && participants.length > 0 && (
-                                                            <div className="absolute top-1/2 left-full ml-2 -translate-y-1/2 bg-white/95 backdrop-blur shadow-2xl rounded-2xl p-2 border border-slate-100 flex gap-1 z-[100] animate-pop-in pointer-events-none">
+                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white/98 backdrop-blur shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none">
                                                                 {participants.map((p) => (
-                                                                    <div key={p.uid} className="w-6 h-6 rounded-full border border-white shadow-sm overflow-hidden flex-shrink-0 bg-indigo-50 flex items-center justify-center">
+                                                                    <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center">
                                                                         {p.photoURL ? (
                                                                             <img src={p.photoURL} className="w-full h-full object-cover" />
                                                                         ) : (
-                                                                            <span className="text-[10px] font-black text-indigo-600 uppercase">{p.name.charAt(0)}</span>
+                                                                            <span className="text-sm font-black text-indigo-600 uppercase">{p.name?.charAt(0) || '?'}</span>
                                                                         )}
                                                                     </div>
                                                                 ))}
@@ -504,6 +486,42 @@
                                     );
                                 })}
                             </div>
+                        </div>
+
+                        {/* スタジオ予約リンクセクション */}
+                        <div className="mt-12 px-4 pb-12 border-t pt-8 bg-slate-50/50">
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="w-1 h-4 bg-indigo-600 rounded-full"></div>
+                                <h3 className="font-black text-slate-800 text-sm tracking-tight leading-none">スタジオの予約はこちら！</h3>
+                            </div>
+                            
+                            <div className="grid gap-3">
+                                <a href="http://www.gw-studio.com/studios/studio_baba3rd/index" target="_blank" className="flex items-center justify-between p-4 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-300 transition-all group">
+                                    <div>
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Takadanobaba</div>
+                                        <div className="font-black text-slate-700 text-sm">ゲートウェイ高田馬場3号店</div>
+                                    </div>
+                                    <div className="text-slate-300 group-hover:text-indigo-500"><IconExternal /></div>
+                                </a>
+                                
+                                <a href="https://bazookastudio.com/" target="_blank" className="flex items-center justify-between p-4 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-300 transition-all group">
+                                    <div>
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Takadanobaba</div>
+                                        <div className="font-black text-slate-700 text-sm">バズーカスタジオ高田馬場</div>
+                                    </div>
+                                    <div className="text-slate-300 group-hover:text-indigo-500"><IconExternal /></div>
+                                </a>
+                                
+                                <a href="https://www.bassontop.co.jp/band/takadanobaba/" target="_blank" className="flex items-center justify-between p-4 bg-white rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-300 transition-all group">
+                                    <div>
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Takadanobaba</div>
+                                        <div className="font-black text-slate-700 text-sm">BASS ON TOP高田馬場</div>
+                                    </div>
+                                    <div className="text-slate-300 group-hover:text-indigo-500"><IconExternal /></div>
+                                </a>
+                            </div>
+                            
+                            <p className="mt-6 text-[10px] text-slate-400 font-bold text-center uppercase tracking-widest">Powered by BandSync</p>
                         </div>
                     </div>
                 </div>
