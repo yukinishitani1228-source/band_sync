@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BandSync - バンド日程調整ツール</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -15,53 +13,63 @@
         body { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .slot-transition { transition: background-color 0.2s ease, box-shadow 0.2s ease; }
+        .slot-transition { transition: background-color 0.15s ease, transform 0.1s ease; }
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 
+    <!-- 修正箇所: data-type="module" を追加してブラウザネイティブの import を Babel 経由で動作可能にしました -->
     <script type="text/babel" data-type="module">
         const { useState, useEffect, useMemo } = React;
 
         // --- Firebase Modules ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            onAuthStateChanged, 
+            GoogleAuthProvider, 
+            signInWithPopup,
+            signOut 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            getDoc, 
+            collection, 
+            onSnapshot, 
+            updateDoc 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- 【最重要】Firebaseの設定 ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
-            authDomain: "bandschedule-98f2c.firebaseapp.com",
-            projectId: "bandschedule-98f2c",
-            storageBucket: "bandschedule-98f2c.firebasestorage.app",
-            messagingSenderId: "1017107663135",
-            appId: "1:1017107663135:web:54771b17cd463b32af482a"
-        };
+        // --- Firebase Configuration ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "AIzaSyAtOjrOa6EBSmpzEb5xOQSOK6WmRl3ALVo", 
+                authDomain: "bandschedule-98f2c.firebaseapp.com",
+                projectId: "bandschedule-98f2c",
+                storageBucket: "bandschedule-98f2c.firebasestorage.app",
+                messagingSenderId: "1017107663135",
+                appId: "1:1017107663135:web:54771b17cd463b32af482a"
+            };
         
-        let app, auth, db;
-        try {
-            app = initializeApp(firebaseConfig);
-            auth = getAuth(app);
-            db = getFirestore(app);
-        } catch (e) {
-            console.error("Firebaseの初期化に失敗しました。設定を確認してください。", e);
-        }
-
-        const appId = "band-sync-production-v1";
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'band-sync-v4-final';
 
         // --- Constants ---
         const START_HOUR = 8;
         const END_HOUR = 23;
         const SLOTS_PER_HOUR = 2;
         const TOTAL_SLOTS = (END_HOUR - START_HOUR + 1) * SLOTS_PER_HOUR;
-
-        const STUDIOS = [
-            { name: 'ゲートウェイ高田馬場', url: 'http://www.gw-studio.com/studios/studio_baba3rd/index' },
-            { name: 'バズーカスタジオ', url: 'https://bazookastudio.com/' },
-            { name: 'BASS ON TOP', url: 'https://www.bassontop.co.jp/band/takadanobaba/' },
-        ];
-
         const DAYS_OF_WEEK = ['日', '月', '火', '水', '木', '金', '土'];
 
         // --- Helpers ---
@@ -71,7 +79,6 @@
             const d = date.getDate().toString().padStart(2, '0');
             return `${y}-${m}-${d}`;
         };
-
         const getWeekDates = (startDate) => {
             const dates = [];
             const base = new Date(startDate);
@@ -82,11 +89,13 @@
             }
             return dates;
         };
-
         const generateId = () => Math.random().toString(36).substring(2, 11);
 
+        // --- Icons ---
+        const IconGoogle = () => <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>;
         const IconCopy = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
-        const IconExternal = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" x2="21" y1="14" y2="3"/></svg>;
+        const IconLogout = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
+        const IconUsers = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 
         function App() {
             const [user, setUser] = useState(null);
@@ -99,95 +108,84 @@
             const [isJoined, setIsJoined] = useState(false);
             const [viewStartDate, setViewStartDate] = useState(new Date());
             const [selectionStart, setSelectionStart] = useState(null);
+            const [activeDetailSlot, setActiveDetailSlot] = useState(null);
 
-            // Auth Initialization
             useEffect(() => {
-                const initAuth = async () => {
-                    if (!auth) return;
-                    try {
-                        setIsAuthLoading(true);
-                        await signInAnonymously(auth);
-                    } catch (e) {
-                        console.error("Auth Error:", e);
-                        setError(`認証エラー: Firebaseコンソールで匿名認証を有効にしてください。`);
-                    } finally {
-                        setIsAuthLoading(false);
-                    }
-                };
-                initAuth();
-                const unsub = onAuthStateChanged(auth, setUser);
+                const unsub = onAuthStateChanged(auth, (u) => {
+                    setUser(u);
+                    setIsAuthLoading(false);
+                });
                 return () => unsub();
             }, []);
 
-            // Data Fetching
             useEffect(() => {
-                if (!user || !sessionId || !db) return;
-
+                if (!user || !sessionId) return;
                 const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId);
                 const unsubSession = onSnapshot(sessionRef, (snap) => {
-                    if (snap.exists()) {
-                        setSessionData(snap.data());
-                    } else {
-                        setError("セッションが見つかりません。URLが正しいか確認してください。");
-                    }
-                }, (err) => {
-                    console.error("Session fetch error:", err);
-                    setError(`データの読み取り権限がありません。Firestoreのルールを確認してください。`);
-                });
+                    if (snap.exists()) setSessionData(snap.data());
+                    else setError("セッションが見つかりません。");
+                }, (err) => setError("データの読み取り権限がありません。"));
 
                 const availCol = collection(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability');
                 const unsubAvail = onSnapshot(availCol, (snap) => {
                     const data = {};
                     snap.forEach(d => data[d.id] = d.data());
                     setAvailabilities(data);
-                    
                     if (data[user.uid]) {
                         setUserName(data[user.uid].name);
                         setIsJoined(true);
                     }
-                }, (err) => console.error("Availability fetch error:", err));
-
+                });
                 return () => { unsubSession(); unsubAvail(); };
             }, [user, sessionId]);
 
+            const loginWithGoogle = async () => {
+                const provider = new GoogleAuthProvider();
+                try {
+                    setError(null);
+                    await signInWithPopup(auth, provider);
+                } catch (e) {
+                    setError(`ログインエラー: ${e.message}`);
+                }
+            };
+
+            const loginAnonymously = async () => {
+                try { await signInAnonymously(auth); } catch (e) { setError("ログインに失敗しました。"); }
+            };
+
             const handleCreate = async (bandName, count) => {
-                if (!user || !db) return;
+                if (!user) return;
                 const id = generateId();
                 const data = {
-                    id, 
-                    bandName, 
-                    memberCount: parseInt(count),
-                    startDate: formatDate(new Date()), 
-                    createdAt: Date.now(),
-                    creatorUid: user.uid
+                    id, bandName, memberCount: parseInt(count),
+                    startDate: formatDate(new Date()), createdAt: Date.now(), creatorUid: user.uid
                 };
-                
                 try {
-                    const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id);
-                    await setDoc(sessionRef, data);
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', id), data);
                     setSessionId(id);
-                } catch (e) {
-                    console.error("Firestore Save Error:", e);
-                    setError(`作成に失敗しました。APIキーが正しいか、Firestoreのルールが開かれているか確認してください。`);
-                }
+                } catch (e) { setError(`作成失敗: ${e.message}`); }
             };
 
             const handleJoin = async () => {
-                if (!userName.trim() || !user || !sessionId || !db) return;
+                if (!userName.trim() || !user || !sessionId) return;
                 try {
                     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability', user.uid);
-                    await setDoc(ref, { name: userName, slots: availabilities[user.uid]?.slots || [] }, { merge: true });
+                    await setDoc(ref, { 
+                        name: userName, 
+                        slots: availabilities[user.uid]?.slots || [],
+                        photoURL: user.photoURL || null 
+                    }, { merge: true });
                     setIsJoined(true);
-                } catch (e) {
-                    setError(`参加に失敗しました。`);
-                }
+                } catch (e) { setError(`参加失敗: ${e.message}`); }
             };
 
             const handleSlotClick = async (dateStr, slotIdx) => {
-                if (!isJoined || !user || !sessionId || !db) return;
+                if (!isJoined || !user || !sessionId) return;
+                const key = `${dateStr}:${slotIdx}`;
+                setActiveDetailSlot(key);
+
                 const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sessionId, 'availability', user.uid);
                 const myCurrentSlots = availabilities[user.uid]?.slots || [];
-                const key = `${dateStr}:${slotIdx}`;
                 const amISelected = myCurrentSlots.includes(key);
 
                 let nextSlots;
@@ -199,77 +197,80 @@
                     const end = Math.max(selectionStart.slotIdx, slotIdx);
                     const rangeKeys = [];
                     for (let i = start; i <= end; i++) rangeKeys.push(`${dateStr}:${i}`);
-
-                    if (selectionStart.wasSelected) {
-                        nextSlots = myCurrentSlots.filter(s => !rangeKeys.includes(s));
-                    } else {
-                        nextSlots = [...new Set([...myCurrentSlots, ...rangeKeys])];
-                    }
+                    nextSlots = selectionStart.wasSelected 
+                        ? myCurrentSlots.filter(s => !rangeKeys.includes(s))
+                        : [...new Set([...myCurrentSlots, ...rangeKeys])];
                     setSelectionStart(null);
                 }
-                
-                try {
-                    await updateDoc(ref, { slots: nextSlots });
-                } catch (e) {
-                    console.error("Update Error:", e);
-                }
+                try { await updateDoc(ref, { slots: nextSlots }); } catch (e) {}
             };
 
-            const aggregated = useMemo(() => {
-                const counts = {};
-                Object.values(availabilities).forEach(p => {
-                    p.slots?.forEach(s => counts[s] = (counts[s] || 0) + 1);
+            const slotDetails = useMemo(() => {
+                const map = {};
+                Object.entries(availabilities).forEach(([uid, data]) => {
+                    data.slots?.forEach(slotKey => {
+                        if (!map[slotKey]) map[slotKey] = [];
+                        map[slotKey].push({ uid, name: data.name, photoURL: data.photoURL });
+                    });
                 });
-                return counts;
+                return map;
             }, [availabilities]);
 
-            if (error) return <ErrorView message={error} onRetry={() => { setError(null); window.location.reload(); }} />;
-            if (!sessionId) return <Landing onCreate={handleCreate} isAuthLoading={isAuthLoading} />;
+            if (error) return <ErrorView message={error} onRetry={() => setError(null)} />;
+            if (isAuthLoading) return <LoadingView />;
+            if (!user) return <AuthGate onGoogle={loginWithGoogle} onAnon={loginAnonymously} />;
+            if (!sessionId) return <Landing onCreate={handleCreate} user={user} />;
             if (!sessionData) return <LoadingView />;
 
             if (!isJoined) return (
                 <JoinView 
                     bandName={sessionData.bandName} 
-                    userName={userName} 
+                    userName={userName || user.displayName || ''} 
                     setUserName={setUserName} 
                     onJoin={handleJoin} 
                 />
             );
 
             const weekDates = getWeekDates(viewStartDate);
+            const activeParticipants = activeDetailSlot ? (slotDetails[activeDetailSlot] || []) : [];
 
             return (
-                <div className="min-h-screen bg-white flex flex-col font-sans max-h-screen overflow-hidden">
+                <div className="min-h-screen bg-white flex flex-col font-sans max-h-screen overflow-hidden relative">
                     <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-40 shrink-0">
                         <div className="min-w-0">
-                            <div className="font-black text-lg text-indigo-600 truncate">{sessionData.bandName}</div>
+                            <div className="font-black text-lg text-indigo-600 truncate leading-tight">{sessionData.bandName}</div>
                             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
                                 <span>目標: <span className="text-slate-600">{sessionData.memberCount}人</span></span>
-                                <span>参加中: <span className="text-indigo-600">{Object.keys(availabilities).length}人</span></span>
+                                <span>現在: <span className="text-indigo-600">{Object.keys(availabilities).length}人</span></span>
                             </div>
                         </div>
-                        <button onClick={() => {
-                            const url = window.location.href.split('?')[0].split('#')[0] + '?s=' + sessionId;
-                            const t = document.createElement('textarea');
-                            t.value = url; document.body.appendChild(t); t.select(); 
-                            document.execCommand('copy'); document.body.removeChild(t);
-                            alert('共有用URLをコピーしました！メンバーに送ってください。');
-                        }} className="shrink-0 flex items-center gap-1.5 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black hover:bg-indigo-100 transition-colors">
-                            <IconCopy /> URLコピー
-                        </button>
+                        <div className="flex gap-2">
+                            <button onClick={() => {
+                                const url = window.location.href.split('?')[0] + '?s=' + sessionId;
+                                const t = document.createElement('textarea');
+                                t.value = url; document.body.appendChild(t); t.select();
+                                document.execCommand('copy'); document.body.removeChild(t);
+                                alert('URLをコピーしました！');
+                            }} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors">
+                                <IconCopy />
+                            </button>
+                            <button onClick={() => signOut(auth)} className="p-2 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 transition-colors">
+                                <IconLogout />
+                            </button>
+                        </div>
                     </header>
 
-                    <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 sticky z-30 shrink-0">
-                        <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() - 7); setViewStartDate(d); }} className="p-2 hover:bg-white rounded-full transition-colors font-bold text-slate-400">← 前週</button>
+                    <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0">
+                        <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() - 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400">← 前週</button>
                         <span className="font-black text-sm text-slate-700">{viewStartDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
-                        <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() + 7); setViewStartDate(d); }} className="p-2 hover:bg-white rounded-full transition-colors font-bold text-slate-400">次週 →</button>
+                        <button onClick={() => { const d = new Date(viewStartDate); d.setDate(d.getDate() + 7); setViewStartDate(d); }} className="text-xs font-black text-slate-400">次週 →</button>
                     </div>
 
-                    <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden no-scrollbar">
-                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shrink-0 shadow-sm">
-                            <div className="w-12 sm:w-16 shrink-0 border-r bg-slate-50"></div>
+                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-24">
+                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm">
+                            <div className="w-12 shrink-0 border-r bg-slate-50"></div>
                             {weekDates.map((d, i) => (
-                                <div key={i} className="flex-1 py-2 text-center border-r last:border-r-0 min-w-0">
+                                <div key={i} className="flex-1 py-2 text-center border-r last:border-r-0">
                                     <div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div>
                                     <div className="font-black text-sm text-slate-700">{d.getDate()}</div>
                                 </div>
@@ -277,9 +278,9 @@
                         </div>
 
                         <div className="flex w-full relative">
-                            <div className="w-12 sm:w-16 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black">
+                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black">
                                 {Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => (
-                                    <div key={h} className="h-12 sm:h-16 flex items-start justify-center pt-2 border-b border-slate-100">{START_HOUR + h}:00</div>
+                                    <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100">{START_HOUR + h}:00</div>
                                 ))}
                             </div>
                             <div className="flex-1 flex">
@@ -289,28 +290,26 @@
                                         <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col">
                                             {Array.from({ length: TOTAL_SLOTS }).map((_, sIdx) => {
                                                 const key = `${ds}:${sIdx}`;
-                                                const count = aggregated[key] || 0;
+                                                const participants = slotDetails[key] || [];
+                                                const count = participants.length;
                                                 const isMe = availabilities[user.uid]?.slots?.includes(key);
                                                 const isFull = count >= sessionData.memberCount;
-                                                const isSelStart = selectionStart?.dateStr === ds && selectionStart?.slotIdx === sIdx;
+                                                const isActive = activeDetailSlot === key;
                                                 
                                                 let cellBg = 'transparent';
-                                                if (isFull) {
-                                                    cellBg = '#ef4444'; // 全員揃ったら鮮やかな赤
-                                                } else if (count > 0) {
-                                                    // 人数による色の濃淡をよりはっきりさせるための計算
-                                                    // 1人目からしっかり色を出し、人数が増えるごとの差分を大きくします
+                                                if (isFull) cellBg = '#ef4444'; 
+                                                else if (count > 0) {
                                                     const ratio = count / sessionData.memberCount;
-                                                    const opacity = 0.2 + (ratio * 0.7); 
-                                                    cellBg = `rgba(67, 56, 202, ${opacity})`; // indigo-700ベースで不透明度を調整
+                                                    const opacity = 0.25 + (ratio * 0.7); 
+                                                    cellBg = `rgba(67, 56, 202, ${opacity})`; 
                                                 }
 
                                                 return (
                                                     <div key={sIdx} onClick={() => handleSlotClick(ds, sIdx)}
                                                         style={{ backgroundColor: cellBg }}
-                                                        className={`h-6 sm:h-8 border-b border-slate-100 cursor-pointer relative slot-transition hover:opacity-80 ${isMe ? 'ring-1 ring-inset ring-white/50 shadow-inner' : ''} ${isSelStart ? 'ring-2 ring-indigo-500 z-10' : ''}`}>
-                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
-                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
+                                                        className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition hover:opacity-80 ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''} ${isActive ? 'ring-2 ring-indigo-500 z-10' : ''}`}>
+                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
+                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
                                                     </div>
                                                 );
                                             })}
@@ -321,65 +320,77 @@
                         </div>
                     </div>
 
-                    <footer className="p-4 border-t bg-slate-50 shrink-0">
-                        <div className="max-w-md mx-auto grid grid-cols-3 gap-2">
-                            {STUDIOS.map((s, i) => (
-                                <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center p-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-600 hover:border-indigo-400 transition-all">
-                                    <span className="truncate w-full text-center">{s.name}</span>
-                                    <IconExternal />
-                                </a>
-                            ))}
+                    {activeDetailSlot && (
+                        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/95 backdrop-blur-md shadow-2xl rounded-3xl p-4 border border-slate-200 z-50 animate-slide-up">
+                            <div className="flex justify-between items-center mb-3">
+                                <div className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1.5">
+                                    <IconUsers /> {activeDetailSlot.split(':')[0]} {START_HOUR + Math.floor(activeDetailSlot.split(':')[1] / 2)}:{activeDetailSlot.split(':')[1] % 2 === 0 ? '00' : '30'}
+                                </div>
+                                <button onClick={() => setActiveDetailSlot(null)} className="text-slate-400">閉じる</button>
+                            </div>
+                            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto no-scrollbar">
+                                {activeParticipants.length > 0 ? activeParticipants.map((p) => (
+                                    <div key={p.uid} className="flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                                        {p.photoURL ? <img src={p.photoURL} className="w-4 h-4 rounded-full" /> : <div className="w-4 h-4 bg-indigo-100 rounded-full flex items-center justify-center text-[8px] font-black text-indigo-600 uppercase">{p.name.charAt(0)}</div>}
+                                        <span className="text-[10px] font-bold text-slate-700">{p.name}</span>
+                                    </div>
+                                )) : <div className="text-center py-2 text-[10px] font-bold text-slate-400 w-full italic">まだ誰も選んでいません</div>}
+                            </div>
                         </div>
-                    </footer>
+                    )}
                 </div>
             );
         }
 
-        // --- Sub-Components ---
+        function AuthGate({ onGoogle, onAnon }) {
+            return (
+                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center">
+                    <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
+                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl">B</div>
+                        <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter">BandSync</h1>
+                        <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest">予定をみんなで共有しよう</p>
+                        <div className="space-y-3">
+                            <button onClick={onGoogle} className="w-full py-4 bg-white border-2 border-slate-100 rounded-2xl font-black flex items-center justify-center hover:bg-slate-50 transition-all">
+                                <IconGoogle /> Googleでログイン
+                            </button>
+                            <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3">または</div>
+                            <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all">名前だけで始める（匿名）</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
 
-        function Landing({ onCreate, isAuthLoading }) {
+        function Landing({ onCreate, user }) {
             const [name, setName] = useState('');
             const [num, setNum] = useState(4);
-            const [isSubmitting, setIsSubmitting] = useState(false);
-
-            const handleStart = async () => {
-                if (!name || isSubmitting) return;
-                setIsSubmitting(true);
-                await onCreate(name, num);
-                setIsSubmitting(false);
-            };
-
             return (
-                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white overflow-hidden">
+                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white">
                     <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
-                        <div className="flex justify-center mb-6">
-                            <div className="w-16 h-16 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center shadow-xl shadow-indigo-100 font-black text-white italic text-2xl">B</div>
-                        </div>
-                        <h1 className="text-4xl font-black mb-1 text-center text-indigo-600 tracking-tighter italic">BandSync</h1>
-                        <p className="text-[10px] text-center text-slate-400 font-bold mb-10 uppercase tracking-widest">練習日程をスマートに決める</p>
-                        <div className="space-y-8">
+                        <div className="flex items-center gap-3 mb-8 border-b pb-6 text-left">
+                            {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">プロジェクト名</label>
-                                <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: BABA-LIVE" value={name} onChange={e => setName(e.target.value)} />
+                                <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">HELLO!</p>
+                                <p className="font-black text-sm truncate w-40">{user.displayName || "GUEST USER"}</p>
+                            </div>
+                        </div>
+                        <div className="space-y-8 text-center">
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">プロジェクト名</label>
+                                <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="例: BAND PRACTICE" value={name} onChange={e => setName(e.target.value)} />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest text-center">目標人数</label>
+                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">目標人数</label>
                                 <div className="flex items-center justify-between gap-4">
-                                    <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">-</button>
+                                    <button onClick={() => setNum(Math.max(1, num - 1))} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black">-</button>
                                     <div className="text-center flex-1">
                                         <span className="text-4xl font-black tabular-nums">{num}</span>
-                                        <span className="text-xs font-bold ml-1 text-slate-400">人</span>
+                                        <span className="text-xs font-bold ml-1 text-slate-400 uppercase">人</span>
                                     </div>
-                                    <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">+</button>
+                                    <button onClick={() => setNum(num + 1)} className="w-14 h-14 bg-slate-100 rounded-2xl text-xl font-black">+</button>
                                 </div>
                             </div>
-                            <button 
-                                disabled={!name || isAuthLoading || isSubmitting} 
-                                onClick={handleStart} 
-                                className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-30"
-                            >
-                                {isAuthLoading ? "準備中..." : isSubmitting ? "作成中..." : "作成する"}
-                            </button>
+                            <button disabled={!name} onClick={() => onCreate(name, num)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all">作成する</button>
                         </div>
                     </div>
                 </div>
@@ -389,35 +400,24 @@
         function JoinView({ bandName, userName, setUserName, onJoin }) {
             return (
                 <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center">
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center text-slate-900">
                         <h1 className="text-xl font-black mb-2 text-indigo-600 italic">BandSync</h1>
-                        <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest">{bandName}</p>
-                        <input 
-                            className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4" 
-                            placeholder="あなたの名前" 
-                            value={userName} 
-                            onChange={e => setUserName(e.target.value)} 
-                        />
-                        <button onClick={onJoin} disabled={!userName.trim()}
-                            className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50">
-                            カレンダーを見る
-                        </button>
+                        <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight">{bandName}</p>
+                        <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4" placeholder="あなたの名前" value={userName} onChange={e => setUserName(e.target.value)} />
+                        <button onClick={onJoin} disabled={!userName.trim()} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg">参加する</button>
                     </div>
                 </div>
             );
         }
 
-        function LoadingView() {
-            return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse italic">SYNCING...</div>;
-        }
-
+        function LoadingView() { return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse italic uppercase tracking-tighter">LOADING...</div>; }
         function ErrorView({ message, onRetry }) {
             return (
-                <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50">
+                <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-center">
                     <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full">
-                        <h1 className="text-xl font-black text-rose-600 mb-4 text-center">エラーが発生しました</h1>
-                        <p className="text-sm text-slate-600 text-center mb-6 leading-relaxed">{message}</p>
-                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold">再読み込み</button>
+                        <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic text-center">ERROR</h1>
+                        <p className="text-sm text-slate-600 mb-6 leading-relaxed text-center">{message}</p>
+                        <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase">CLOSE</button>
                     </div>
                 </div>
             );
