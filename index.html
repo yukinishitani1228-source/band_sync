@@ -74,7 +74,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appIdPrefix = 'band-sync-stable-v10'; 
+        const appIdPrefix = 'band-sync-stable-v11'; 
 
         // --- 定数 ---
         const START_HOUR = 8;
@@ -130,7 +130,7 @@
         const IconCircleOK = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
         const IconSuta = () => <div className="w-5 h-5 flex items-center justify-center font-black text-[10px] leading-none tracking-tighter">スタ</div>;
 
-        // --- サブコンポーネント定義 ---
+        // --- サブコンポーネント ---
         const LoadingView = () => (
             <div className="h-screen flex flex-col items-center justify-center font-black text-slate-300 animate-pulse italic uppercase bg-white">
                 <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -148,14 +148,14 @@
             </div>
         );
 
-        const AuthScreen = ({ onGoogle, onAnon }) => (
+        const AuthView = ({ onGoogle, onAnon }) => (
             <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center font-sans">
                 <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
                     <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl shadow-indigo-100">B</div>
-                    <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight">BandSync</h1>
+                    <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight font-sans">BandSync</h1>
                     <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed">練習日程をみんなで共有しよう</p>
                     <div className="space-y-4">
-                        <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm font-sans text-white">
+                        <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm text-white font-sans">
                             <IconGoogle /> Googleアカウントでログイン
                         </button>
                         <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3 font-sans">または</div>
@@ -165,7 +165,7 @@
             </div>
         );
 
-        const CreateScreen = ({ onCreate, user, onLogout }) => {
+        const CreateView = ({ onCreate, user, onLogout }) => {
             const [name, setName] = useState('');
             const [num, setNum] = useState(4);
             const [sDate, setSDate] = useState(formatDate(new Date()));
@@ -178,36 +178,38 @@
                         <div className="flex items-center justify-between mb-8 border-b pb-6 text-left">
                             <div className="flex items-center gap-3">
                                 {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-sm" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
-                                <div><p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">{user.isAnonymous ? "GUEST" : "LOGGED IN"}</p><p className="font-black text-sm truncate w-32 text-slate-900">{user.displayName || "ゲストユーザー"}</p></div>
+                                <div><p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1 font-sans">{user.isAnonymous ? "GUEST" : "LOGGED IN"}</p><p className="font-black text-sm truncate w-32 font-sans text-slate-900">{user.displayName || "ゲストユーザー"}</p></div>
                             </div>
                             <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2"><IconLogout /></button>
                         </div>
                         <div className="space-y-6 text-left text-slate-900">
-                            <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans">調整プロジェクト名</label><input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 font-sans" value={name} onChange={e=>setName(e.target.value)} placeholder="例: LIVE練習" /></div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans">開始日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center font-sans" value={sDate} onChange={e=>setSDate(e.target.value)} /></div>
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans">終了日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center font-sans" value={eDate} onChange={e=>setEDate(e.target.value)} /></div>
+                            <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans font-sans">調整プロジェクト名</label><input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 font-sans" value={name} onChange={e=>setName(e.target.value)} placeholder="例: LIVE練習" /></div>
+                            <div className="grid grid-cols-2 gap-3 font-sans">
+                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">開始日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center font-sans" value={sDate} onChange={e=>setSDate(e.target.value)} /></div>
+                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest">終了日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center font-sans" value={eDate} onChange={e=>setEDate(e.target.value)} /></div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans">目標人数</label>
                                 <div className="flex items-center justify-between gap-4">
                                     <button onClick={()=>setNum(Math.max(1, num-1))} className="w-12 h-12 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200">-</button>
-                                    <div className="text-center flex-1"><span className="text-4xl font-black">{num}</span><span className="text-xs font-bold ml-1 text-slate-400 uppercase">人</span></div>
+                                    <div className="text-center flex-1 font-sans"><span className="text-4xl font-black">{num}</span><span className="text-xs font-bold ml-1 text-slate-400">人</span></div>
                                     <button onClick={()=>setNum(num+1)} className="w-12 h-12 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200">+</button>
                                 </div>
                             </div>
-                            <button disabled={!name} onClick={()=>onCreate(name, num, sDate, eDate)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all text-center">カレンダーを作成</button>
+                            <button disabled={!name} onClick={()=>onCreate(name, num, sDate, eDate)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all text-center">
+                                カレンダーを作成
+                            </button>
                         </div>
                     </div>
                 </div>
             );
         };
 
-        const JoinScreen = ({ bandName, userName, setUserName, onJoin, isJoining }) => (
+        const JoinView = ({ bandName, userName, setUserName, onJoin, isJoining }) => (
             <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4 text-slate-900 text-left font-sans">
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center">
                     <h1 className="text-xl font-black mb-2 text-indigo-600 italic text-center text-indigo-600">BandSync</h1>
-                    <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight text-center">{bandName}</p>
+                    <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight text-center font-sans">{bandName}</p>
                     <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4 text-slate-900" placeholder="あなたの表示名" value={userName || ''} onChange={e => setUserName(e.target.value)} />
                     <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center text-white">
                         {isJoining ? "処理中..." : "カレンダーを表示"}
@@ -236,7 +238,7 @@
             const longPressTimer = useRef(null);
             const isLongPressing = useRef(false);
 
-            // Auth Listener
+            // Auth
             useEffect(() => {
                 const unsub = onAuthStateChanged(auth, (u) => {
                     setUser(u);
@@ -246,7 +248,7 @@
                 return () => unsub();
             }, [userName]);
 
-            // Data Listener
+            // Data
             useEffect(() => {
                 if (!user || !sessionId) return;
                 const sessionRef = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', sessionId);
@@ -258,7 +260,7 @@
                     } else {
                         setError("セッションが見つかりませんでした。");
                     }
-                }, (err) => setError("データの読み取りに失敗しました。"));
+                }, (err) => setError("読み取り失敗"));
 
                 const availCol = collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability');
                 const unsubAvail = onSnapshot(availCol, (snap) => {
@@ -273,15 +275,11 @@
             }, [user, sessionId, viewStart]);
 
             const loginWithGoogle = async () => {
-                const provider = new GoogleAuthProvider();
                 try {
-                    setError(null);
+                    const provider = new GoogleAuthProvider();
                     await signInWithPopup(auth, provider);
                 } catch (e) {
-                    if (e.code !== 'auth/popup-closed-by-user') {
-                        console.error(e);
-                        setError(`Googleログイン失敗: ${e.message}`);
-                    }
+                    console.error(e);
                 }
             };
 
@@ -297,7 +295,7 @@
                     await setDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', id), data);
                     setSessionId(id);
                     setViewStart(new Date(start));
-                } catch (e) { setError(`作成失敗: ${e.message}`); }
+                } catch (e) { setError(`作成失敗`); }
             };
 
             const handleJoin = async () => {
@@ -312,7 +310,7 @@
                         slots: myExistingData?.slots || [], photoURL: user.photoURL || null, lastUpdated: Date.now()
                     }, { merge: true });
                     setIsJoined(true);
-                } catch (e) { setError(`参加に失敗しました。`); } finally { setIsJoining(false); }
+                } catch (e) { setError(`参加失敗`); } finally { setIsJoining(false); }
             };
 
             const handleSlotClick = async (dateStr, slotIdx) => {
@@ -371,65 +369,65 @@
 
             if (error) return <ErrorView message={error} onRetry={() => window.location.reload()} />;
             if (isAuthLoading) return <LoadingView />;
-            if (!user) return <AuthScreen onGoogle={() => loginWithGoogle()} onAnon={() => signInAnonymously(auth)} />;
-            if (!sessionId) return <CreateScreen onCreate={handleCreate} user={user} onLogout={handleLogout} />;
+            if (!user) return <AuthView onGoogle={() => loginWithGoogle()} onAnon={() => signInAnonymously(auth)} />;
+            if (!sessionId) return <CreateView onCreate={handleCreate} user={user} onLogout={handleLogout} />;
             if (!sessionData || !viewStart) return <LoadingView />;
-            if (!isJoined) return <JoinScreen bandName={sessionData.bandName} userName={userName} setUserName={setUserName} onJoin={handleJoin} isJoining={isJoining} />;
+            if (!isJoined) return <JoinView bandName={sessionData.bandName} userName={userName} setUserName={setUserName} onJoin={handleJoin} isJoining={isJoining} />;
 
             const weekDates = getWeekDatesWithinRange(viewStart, sessionData.startDate, sessionData.endDate);
             const canGoPrev = viewStart > new Date(sessionData.startDate);
             const canGoNext = (() => { const n = new Date(viewStart); n.setDate(n.getDate()+7); return n <= new Date(sessionData.endDate); })();
 
             return (
-                <div className="h-screen bg-white flex flex-col font-sans overflow-hidden relative text-slate-900 font-sans">
-                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-[60] shrink-0 shadow-sm font-sans">
+                <div className="h-screen bg-white flex flex-col font-sans overflow-hidden relative text-slate-900 font-sans font-sans">
+                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-[60] shrink-0 shadow-sm font-sans font-sans">
                         <div className="min-w-0">
-                            <div className="font-black text-lg text-indigo-600 truncate leading-tight">{sessionData.bandName}</div>
-                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2"><span>目標: {sessionData.memberCount}人</span><span>参加: {allAvailability.length}人</span></div>
+                            <div className="font-black text-lg text-indigo-600 truncate leading-tight font-sans">{sessionData.bandName}</div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2 font-sans font-sans"><span>目標: {sessionData.memberCount}人</span><span>参加: {allAvailability.length}人</span></div>
                         </div>
-                        <div className="flex gap-1.5 font-sans">
+                        <div className="flex gap-1.5 font-sans font-sans font-sans">
                             <button onClick={() => setShowMatchModal(true)} className="p-2.5 bg-emerald-50 text-emerald-500 rounded-xl hover:bg-emerald-100 relative"><IconCircleOK />{matchedRanges.length > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white">{matchedRanges.length}</div>}</button>
-                            <button onClick={() => setShowStudioModal(true)} className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 font-sans"><IconSuta /></button>
-                            <button onClick={() => { const t = document.createElement('textarea'); t.value = window.location.origin + window.location.pathname + '?s=' + sessionId; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); alert('URLをコピーしました！メンバーに送ってください。'); }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 font-sans"><IconCopy /></button>
-                            <button onClick={handleLogout} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 font-sans"><IconLogout /></button>
+                            <button onClick={() => setShowStudioModal(true)} className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100"><IconSuta /></button>
+                            <button onClick={() => { const t = document.createElement('textarea'); t.value = window.location.origin + window.location.pathname + '?s=' + sessionId; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); alert('URLをコピーしました！メンバーに送ってください。'); }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100"><IconCopy /></button>
+                            <button onClick={handleLogout} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500"><IconLogout /></button>
                         </div>
                     </header>
 
-                    <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0 font-sans">
+                    <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0 font-sans font-sans font-sans">
                         <button disabled={!canGoPrev} onClick={() => { const n = new Date(viewStart); n.setDate(n.getDate()-7); setViewStart(n); }} className={`text-xs font-black p-1 ${!canGoPrev ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>← 前週</button>
-                        <span className="font-black text-sm text-slate-700">{viewStart.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
+                        <span className="font-black text-sm text-slate-700 font-sans font-sans">{viewStart.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
                         <button disabled={!canGoNext} onClick={() => { const n = new Date(viewStart); n.setDate(n.getDate()+7); setViewStart(n); }} className={`text-xs font-black p-1 ${!canGoNext ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>次週 →</button>
                     </div>
 
-                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-10 bg-white">
-                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm text-center">
-                            <div className="w-12 shrink-0 border-r bg-slate-50"></div>
+                    <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-10 bg-white font-sans">
+                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm text-center font-sans font-sans font-sans">
+                            <div className="w-12 shrink-0 border-r bg-slate-50 font-sans font-sans font-sans"></div>
                             {weekDates.map((d, i) => (
-                                <div key={i} className="flex-1 py-2 border-r last:border-r-0 font-sans"><div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div><div className="font-black text-sm text-slate-700">{d.getDate()}</div></div>
+                                <div key={i} className="flex-1 py-2 border-r last:border-r-0 font-sans font-sans"><div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div><div className="font-black text-sm text-slate-700 font-sans font-sans">{d.getDate()}</div></div>
                             ))}
-                            {Array.from({ length: 7 - weekDates.length }).map((_, i) => <div key={'e-'+i} className="flex-1 bg-slate-50/50 border-r last:border-r-0"></div>)}
+                            {Array.from({ length: 7 - weekDates.length }).map((_, i) => <div key={'e-'+i} className="flex-1 bg-slate-50/50 border-r last:border-r-0 font-sans font-sans font-sans"></div>)}
                         </div>
 
-                        <div className="flex w-full relative">
-                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black text-center font-sans">{Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100">{START_HOUR + h}:00</div>)}</div>
-                            <div className="flex-1 flex font-sans font-sans">
+                        <div className="flex w-full relative font-sans font-sans font-sans">
+                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black text-center font-sans font-sans">{Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100 font-sans font-sans">{START_HOUR + h}:00</div>)}</div>
+                            <div className="flex-1 flex font-sans font-sans font-sans font-sans font-sans">
                                 {weekDates.map((d, dayIdx) => {
                                     const ds = formatDate(d);
                                     return (
-                                        <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col relative font-sans">
+                                        <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col relative font-sans font-sans font-sans font-sans">
                                             {Array.from({ length: TOTAL_SLOTS }).map((_, sIdx) => {
                                                 const key = `${ds}:${sIdx}`; const participants = slotDetails[key] || []; const count = participants.length;
                                                 const isMe = allAvailability.find(a => a.uid === user.uid)?.slots?.includes(key); const isFull = count >= sessionData.memberCount;
                                                 const isPeeking = peekSlot === key; const isSStart = selectionStart && selectionStart.dateStr === ds && selectionStart.slotIdx === sIdx;
                                                 let cellBg = isFull ? '#ef4444' : count > 0 ? `rgba(67, 56, 202, ${0.25 + (count/sessionData.memberCount * 0.7)})` : 'transparent';
                                                 return (
-                                                    <div key={sIdx} onPointerDown={() => onSlotPointerDown(key)} onPointerUp={() => onSlotPointerUp(key, ds, sIdx)} onPointerLeave={() => setPeekSlot(null)} style={{ backgroundColor: cellBg }} className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition select-none ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''} ${isPeeking ? 'z-50' : ''} ${isSStart ? 'selection-active' : ''}`}>
-                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none font-sans font-sans"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
-                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none font-sans font-sans ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
+                                                    <div key={sIdx} onPointerDown={() => onSlotPointerDown(key)} onPointerUp={() => onSlotPointerUp(key, ds, sIdx)} onPointerLeave={() => setPeekSlot(null)} style={{ backgroundColor: cellBg }} className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition select-none font-sans font-sans font-sans font-sans font-sans ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''} ${isPeeking ? 'z-50' : ''} ${isSStart ? 'selection-active' : ''}`}>
+                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none font-sans font-sans font-sans"><div className="w-1 h-1 bg-white rounded-full font-sans font-sans"></div></div>}
+                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none font-sans font-sans font-sans ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
                                                         {isPeeking && participants.length > 0 && (
-                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white/98 backdrop-blur shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none text-left font-sans font-sans font-sans">
+                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white/98 backdrop-blur shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none text-left font-sans font-sans font-sans font-sans font-sans">
                                                                 {participants.map((p) => (
-                                                                    <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center font-sans font-sans font-sans">{p.photoURL ? <img src={p.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-black text-indigo-600 uppercase font-sans font-sans">{p.name?.charAt(0) || '?'}</span>}</div>
+                                                                    <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center font-sans font-sans font-sans font-sans font-sans">{p.photoURL ? <img src={p.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-black text-indigo-600 uppercase font-sans font-sans font-sans font-sans">{p.name?.charAt(0) || '?'}</span>}</div>
                                                                 ))}
                                                             </div>
                                                         )}
@@ -445,41 +443,41 @@
 
                     {/* Modals */}
                     {showMatchModal && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMatchModal(false)}></div>
-                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans">
-                                <div className="flex justify-between items-center mb-6 text-emerald-500 font-sans font-sans"><div className="flex items-center gap-2"><IconCircleOK /><h2 className="text-xl font-black italic tracking-tighter">全員OKの時間</h2></div><button onClick={() => setShowMatchModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 font-sans font-sans font-sans">
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 font-sans font-sans font-sans font-sans">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm font-sans font-sans font-sans" onClick={() => setShowMatchModal(false)}></div>
+                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans font-sans font-sans">
+                                <div className="flex justify-between items-center mb-6 text-emerald-500 font-sans font-sans font-sans"><div className="flex items-center gap-2 font-sans font-sans font-sans font-sans"><IconCircleOK /><h2 className="text-xl font-black italic tracking-tighter font-sans font-sans font-sans">全員OKの時間</h2></div><button onClick={() => setShowMatchModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 font-sans font-sans font-sans font-sans font-sans">
                                     {matchedRanges.length > 0 ? matchedRanges.map((m, idx) => {
                                         const sH = START_HOUR + Math.floor(m.start / 2); const sM = m.start % 2 === 0 ? "00" : "30";
                                         const eH = START_HOUR + Math.floor((m.end + 1) / 2); const eM = (m.end + 1) % 2 === 0 ? "00" : "30";
                                         return (
-                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100 group hover:border-emerald-200 transition-all font-sans font-sans"><div className="font-black text-slate-800 text-sm font-sans">{`${m.date.getMonth() + 1}/${m.date.getDate()}(${DAYS_OF_WEEK[m.date.getDay()]})`}</div><div className="bg-white px-3 py-1 rounded-full text-xs font-black text-emerald-500 shadow-sm font-sans">{sH}:{sM} 〜 {eH}:{eM}</div></div>
+                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100 group hover:border-emerald-200 transition-all font-sans font-sans font-sans font-sans font-sans font-sans"><div className="font-black text-slate-800 text-sm font-sans font-sans font-sans font-sans">{`${m.date.getMonth() + 1}/${m.date.getDate()}(${DAYS_OF_WEEK[m.date.getDay()]})`}</div><div className="bg-white px-3 py-1 rounded-full text-xs font-black text-emerald-500 shadow-sm font-sans font-sans font-sans font-sans">{sH}:{sM} 〜 {eH}:{eM}</div></div>
                                         );
-                                    }) : <div className="py-12 text-center text-slate-300 font-sans">全員が集まれる時間は<br/>まだありません</div>}
+                                    }) : <div className="py-12 text-center text-slate-300 font-sans font-sans font-sans font-sans font-sans">全員が集まれる時間は<br/>まだありません</div>}
                                 </div>
-                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans">Powered by BandSync</p>
+                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans font-sans font-sans font-sans">Powered by BandSync</p>
                             </div>
                         </div>
                     )}
 
                     {showStudioModal && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowStudioModal(false)}></div>
-                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans">
-                                <div className="flex justify-between items-center mb-6 text-amber-500 font-sans font-sans font-sans"><div className="flex items-center gap-2 font-sans"><div className="bg-amber-100 px-2 py-1 rounded-lg text-[10px] font-black">スタ</div><h2 className="text-xl font-black italic tracking-tighter">Studio Booking</h2></div><button onClick={() => setShowStudioModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans font-sans font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 font-sans font-sans font-sans font-sans font-sans">
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 font-sans font-sans font-sans font-sans font-sans">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm font-sans font-sans font-sans font-sans" onClick={() => setShowStudioModal(false)}></div>
+                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans font-sans font-sans font-sans">
+                                <div className="flex justify-between items-center mb-6 text-amber-500 font-sans font-sans font-sans font-sans font-sans"><div className="flex items-center gap-2 font-sans font-sans font-sans font-sans font-sans font-sans"><div className="bg-amber-100 px-2 py-1 rounded-lg text-[10px] font-black font-sans font-sans font-sans font-sans font-sans font-sans font-sans">スタ</div><h2 className="text-xl font-black italic tracking-tighter font-sans font-sans font-sans font-sans">Studio Booking</h2></div><button onClick={() => setShowStudioModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 font-sans font-sans font-sans font-sans font-sans font-sans">
                                     {[
                                         { name: 'ゲートウェイ高田馬場3号店', url: 'http://www.gw-studio.com/studios/studio_baba3rd/index' },
                                         { name: 'バズーカスタジオ高田馬場', url: 'https://bazookastudio.com/' },
                                         { name: 'BASS ON TOP高田馬場', url: 'https://www.bassontop.co.jp/band/takadanobaba/' }
                                     ].map(s => (
-                                        <a key={s.url} href={s.url} target="_blank" className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group font-sans font-sans">
-                                            <div className="text-left font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Takadanobaba</div><div className="font-black text-slate-700 text-sm">{s.name}</div></div><div className="text-slate-300 group-hover:text-amber-500 font-sans font-sans"><IconExternal /></div>
+                                        <a key={s.url} href={s.url} target="_blank" className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group font-sans font-sans font-sans font-sans font-sans font-sans font-sans">
+                                            <div className="text-left font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 font-sans font-sans font-sans font-sans font-sans font-sans">Takadanobaba</div><div className="font-black text-slate-700 text-sm font-sans font-sans font-sans font-sans font-sans font-sans">{s.name}</div></div><div className="text-slate-300 group-hover:text-amber-500 font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans"><IconExternal /></div>
                                         </a>
                                     ))}
                                 </div>
-                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans">Powered by BandSync</p>
+                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans font-sans">Powered by BandSync</p>
                             </div>
                         </div>
                     )}
@@ -487,8 +485,8 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
     </script>
 </body>
 </html>
