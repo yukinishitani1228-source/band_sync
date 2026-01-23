@@ -12,21 +12,15 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; -webkit-tap-highlight-color: transparent; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .slot-transition { transition: background-color 0.15s ease, transform 0.1s ease; }
         
-        @keyframes popIn {
-            0% { transform: scale(0.5) translateY(20px); opacity: 0; }
-            100% { transform: scale(1) translateY(0); opacity: 1; }
-        }
-        .animate-pop-in { animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .animate-pop-in { animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
 
-        @keyframes modalFade {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
+        @keyframes modalFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .animate-modal { animation: modalFade 0.2s ease-out forwards; }
 
         .selection-active {
@@ -35,13 +29,12 @@
             outline: 2px solid white;
         }
 
-        /* 期間外の余白デザイン（斜線パターン） */
+        /* 期間外の余白デザイン */
         .out-of-range-column {
             background-color: #f1f5f9;
             background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(203, 213, 225, 0.2) 10px, rgba(203, 213, 225, 0.2) 20px);
-            pointer-events: none !important; /* 絶対にクリックさせない */
+            pointer-events: none !important;
             opacity: 0.6;
-            cursor: default;
         }
     </style>
 </head>
@@ -65,7 +58,8 @@
             setDoc, 
             onSnapshot, 
             collection,
-            updateDoc 
+            updateDoc,
+            deleteDoc
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
@@ -83,7 +77,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appIdPrefix = 'band-sync-stable-v13'; 
+        const appIdPrefix = 'band-sync-stable-v20'; 
 
         // --- 定数 ---
         const START_HOUR = 8;
@@ -101,361 +95,324 @@
             return `${y}-${m}-${d}`;
         };
 
-        const getDatesInRange = (startDate, endDate) => {
-            const dates = [];
-            let current = new Date(startDate);
-            const last = new Date(endDate);
-            let count = 0;
-            while (current <= last && count < 100) {
-                dates.push(new Date(current));
-                current.setDate(current.getDate() + 1);
-                count++;
-            }
-            return dates;
-        };
-
-        const getWeekDatesWithinRange = (viewStart, rangeStart, rangeEnd) => {
-            if (!viewStart) return [];
-            const dates = [];
-            // 無効な日付データがある場合のフォールバック
-            const rStart = new Date(rangeStart || viewStart);
-            const rEnd = new Date(rangeEnd || new Date(rStart.getTime() + 7 * 24 * 60 * 60 * 1000));
-            rStart.setHours(0,0,0,0);
-            rEnd.setHours(23,59,59,999);
-
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(viewStart);
-                d.setDate(viewStart.getDate() + i);
-                if (d >= rStart && d <= rEnd) dates.push(d);
-            }
-            return dates;
-        };
-
         const generateId = () => Math.random().toString(36).substring(2, 11);
 
-        // --- UI アイコン ---
+        // --- アイコンコンポーネント ---
         const IconGoogle = () => <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>;
         const IconCopy = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>;
         const IconLogout = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>;
         const IconExternal = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
         const IconCircleOK = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>;
         const IconSuta = () => <div className="w-5 h-5 flex items-center justify-center font-black text-[10px] leading-none tracking-tighter">スタ</div>;
+        const IconSettings = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+        const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
 
-        // --- サブコンポーネント ---
-        const LoadingView = () => (
-            <div className="h-screen flex flex-col items-center justify-center font-black text-slate-300 animate-pulse italic uppercase bg-white font-sans">
-                <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                LOADING...
-            </div>
-        );
+        // --- Sub-Components ---
+        const ProjectForm = ({ initialData, onSubmit, onCancel, title, buttonText }) => {
+            const [name, setName] = useState(initialData?.bandName || '');
+            const [num, setNum] = useState(initialData?.memberCount || 4);
+            const [sDate, setSDate] = useState(initialData?.startDate || formatDate(new Date()));
+            const [eDate, setEDate] = useState(initialData?.endDate || formatDate(new Date(Date.now() + 14 * 86400000)));
 
-        const ErrorView = ({ message, onRetry }) => (
-            <div className="min-h-screen flex items-center justify-center p-6 bg-rose-50 text-slate-900 font-sans">
-                <div className="bg-white p-8 rounded-3xl shadow-xl border border-rose-100 max-w-md w-full text-center">
-                    <h1 className="text-xl font-black text-rose-600 mb-4 uppercase italic">ERROR</h1>
-                    <p className="text-sm text-slate-600 mb-6 leading-relaxed whitespace-pre-wrap">{message}</p>
-                    <button onClick={onRetry} className="w-full py-3 bg-rose-600 text-white rounded-xl font-bold uppercase hover:bg-rose-700 transition-all text-center">やり直す</button>
-                </div>
-            </div>
-        );
-
-        const AuthView = ({ onGoogle, onAnon }) => (
-            <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center font-sans">
-                <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
-                    <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-xl mx-auto mb-6 text-white italic font-black text-2xl shadow-indigo-100">B</div>
-                    <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter leading-tight font-sans">BandSync</h1>
-                    <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest leading-relaxed">練習日程をみんなで共有しよう</p>
-                    <div className="space-y-4">
-                        <button onClick={onGoogle} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-sm font-sans text-white">
-                            <IconGoogle /> Googleアカウントでログイン
-                        </button>
-                        <div className="py-2 flex items-center text-slate-300 text-[10px] font-bold uppercase tracking-widest before:flex-1 before:border-t before:mr-3 after:flex-1 after:border-t after:ml-3 font-sans">または</div>
-                        <button onClick={onAnon} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold text-sm hover:bg-slate-100 transition-all font-sans">名前だけで始める（匿名）</button>
-                    </div>
-                </div>
-            </div>
-        );
-
-        const CreateView = ({ onCreate, user, onLogout }) => {
-            const [name, setName] = useState('');
-            const [num, setNum] = useState(4);
-            const [sDate, setSDate] = useState(formatDate(new Date()));
-            const [eDate, setEDate] = useState(() => {
-                const d = new Date(); d.setDate(d.getDate() + 14); return formatDate(d);
-            });
             return (
-                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center font-sans">
-                    <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl font-sans">
-                        <div className="flex items-center justify-between mb-8 border-b pb-6 text-left">
-                            <div className="flex items-center gap-3">
-                                {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full shadow-sm" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
-                                <div><p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">{user.isAnonymous ? "GUEST" : "LOGGED IN"}</p><p className="font-black text-sm truncate w-32 text-slate-900 font-sans">{user.displayName || "ゲストユーザー"}</p></div>
-                            </div>
-                            <button onClick={onLogout} className="text-slate-300 hover:text-rose-500 transition-colors p-2"><IconLogout /></button>
+                <div className="space-y-6 text-left text-slate-900">
+                    <h2 className="text-xl font-black text-indigo-600 italic text-center mb-4">{title}</h2>
+                    <div><label className="text-[10px] font-black text-slate-400 block mb-1 uppercase tracking-widest">プロジェクト名</label><input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none font-sans" value={name} onChange={e=>setName(e.target.value)} placeholder="例: LIVE練習" /></div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div><label className="text-[10px] font-black text-slate-400 block mb-1">開始日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center font-sans" value={sDate} onChange={e=>setSDate(e.target.value)} /></div>
+                        <div><label className="text-[10px] font-black text-slate-400 block mb-1">終了日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center font-sans" value={eDate} onChange={e=>setEDate(e.target.value)} /></div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-black text-slate-400 block mb-1 uppercase tracking-widest">目標人数</label>
+                        <div className="flex items-center justify-between gap-4">
+                            <button onClick={()=>setNum(Math.max(1, num-1))} className="w-12 h-12 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">-</button>
+                            <div className="text-center flex-1 font-sans font-sans"><span className="text-4xl font-black tabular-nums">{num}</span><span className="text-xs font-bold ml-1 text-slate-400 uppercase">人</span></div>
+                            <button onClick={()=>setNum(num+1)} className="w-12 h-12 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 transition-colors">+</button>
                         </div>
-                        <div className="space-y-6 text-left text-slate-900 font-sans">
-                            <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans">調整プロジェクト名</label><input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none text-slate-900 font-sans" value={name} onChange={e=>setName(e.target.value)} placeholder="例: LIVE練習" /></div>
-                            <div className="grid grid-cols-2 gap-3 font-sans">
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans">開始日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center font-sans" value={sDate} onChange={e=>setSDate(e.target.value)} /></div>
-                                <div><label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans">終了日</label><input type="date" className="w-full p-3 bg-slate-50 border-none rounded-xl font-bold text-sm text-center font-sans" value={eDate} onChange={e=>setEDate(e.target.value)} /></div>
-                            </div>
-                            <div className="font-sans">
-                                <label className="text-[10px] font-black text-slate-400 block mb-2 uppercase tracking-widest font-sans">目標人数</label>
-                                <div className="flex items-center justify-between gap-4 font-sans">
-                                    <button onClick={()=>setNum(Math.max(1, num-1))} className="w-12 h-12 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 font-sans">-</button>
-                                    <div className="text-center flex-1 font-sans"><span className="text-4xl font-black">{num}</span><span className="text-xs font-bold ml-1 text-slate-400 uppercase font-sans">人</span></div>
-                                    <button onClick={()=>setNum(num+1)} className="w-12 h-12 bg-slate-100 rounded-2xl text-xl font-black hover:bg-slate-200 font-sans">+</button>
-                                </div>
-                            </div>
-                            <button disabled={!name} onClick={()=>onCreate(name, num, sDate, eDate)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all text-center">
-                                カレンダーを作成
-                            </button>
-                        </div>
+                    </div>
+                    <div className="flex gap-2 font-sans">
+                        {onCancel && <button onClick={onCancel} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-bold hover:bg-slate-200 transition-all font-sans">戻る</button>}
+                        <button disabled={!name} onClick={()=>onSubmit(name, num, sDate, eDate)} className="flex-[2] py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all font-sans">
+                            {buttonText}
+                        </button>
                     </div>
                 </div>
             );
         };
 
-        const JoinView = ({ bandName, userName, setUserName, onJoin, isJoining }) => (
+        const JoinScreen = ({ bandName, userName, setUserName, onJoin, isJoining }) => (
             <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-4 text-slate-900 text-left font-sans">
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-sm text-center">
-                    <h1 className="text-xl font-black mb-2 text-indigo-600 italic text-center text-indigo-600 font-sans">BandSync</h1>
-                    <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight text-center font-sans">{bandName}</p>
+                    <h1 className="text-xl font-black mb-2 text-indigo-600 italic font-sans">BandSync</h1>
+                    <p className="text-sm font-bold mb-8 text-slate-400 uppercase tracking-widest leading-tight font-sans">{bandName}</p>
                     <input className="w-full p-4 bg-slate-50 border-none rounded-2xl font-black text-lg text-center focus:ring-2 focus:ring-indigo-500 outline-none mb-4 text-slate-900 font-sans" placeholder="あなたの表示名" value={userName || ''} onChange={e => setUserName(e.target.value)} />
-                    <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center text-white">
+                    <button onClick={onJoin} disabled={!userName || !userName.trim() || isJoining} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 text-center font-sans">
                         {isJoining ? "処理中..." : "カレンダーを表示"}
                     </button>
                 </div>
             </div>
         );
 
-        // --- メインアプリケーション ---
+        // --- Main App ---
         function App() {
             const [user, setUser] = useState(null);
             const [isAuthLoading, setIsAuthLoading] = useState(true);
-            const [error, setError] = useState(null);
             const [sessionId, setSessionId] = useState(new URLSearchParams(window.location.search).get('s') || null);
             const [sessionData, setSessionData] = useState(null);
             const [allAvailability, setAllAvailability] = useState([]);
+            const [globalSessions, setGlobalSessions] = useState([]);
             const [userName, setUserName] = useState('');
             const [isJoined, setIsJoined] = useState(false);
-            const [isJoining, setIsJoining] = useState(false);
             const [viewStart, setViewStart] = useState(null);
             const [peekSlot, setPeekSlot] = useState(null);
             const [selectionStart, setSelectionStart] = useState(null);
             const [showMatchModal, setShowMatchModal] = useState(false);
             const [showStudioModal, setShowStudioModal] = useState(false);
-            
+            const [showSettingsModal, setShowSettingsModal] = useState(false);
+            const [projectToDelete, setProjectToDelete] = useState(null);
             const longPressTimer = useRef(null);
-            const isLongPressing = useRef(false);
 
-            // Auth Listener
+            // Auth
             useEffect(() => {
                 const unsub = onAuthStateChanged(auth, (u) => {
-                    setUser(u);
-                    setIsAuthLoading(false);
+                    setUser(u); setIsAuthLoading(false);
                     if (u && !userName) setUserName(u.displayName || '');
                 });
                 return () => unsub();
             }, [userName]);
 
-            // Data Listener
+            // Data
             useEffect(() => {
-                if (!user || !sessionId) return;
-                const sessionRef = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', sessionId);
-                const unsubSession = onSnapshot(sessionRef, (snap) => {
-                    if (snap.exists()) {
-                        const data = snap.data();
-                        setSessionData(data);
-                        // viewStartの初期化（既に設定されていれば上書きしない）
-                        setViewStart(prev => prev || new Date(data.startDate || Date.now()));
-                    } else {
-                        setError("セッションが見つかりませんでした。");
-                    }
-                }, (err) => setError("読み取り失敗"));
-
-                const availCol = collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability');
-                const unsubAvail = onSnapshot(availCol, (snap) => {
-                    const docs = [];
-                    snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
-                    const filtered = docs.filter(item => item.sessionId === sessionId);
-                    setAllAvailability(filtered);
-                    const me = filtered.find(item => item.uid === user.uid);
-                    if (me) { setIsJoined(true); setUserName(me.name); }
+                if (!user) return;
+                const unsubS = onSnapshot(collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions'), snap => {
+                    const list = []; snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+                    setGlobalSessions(list);
                 });
-                return () => { unsubSession(); unsubAvail(); };
-            }, [user, sessionId]);
+                const unsubA = onSnapshot(collection(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability'), snap => {
+                    const docs = []; snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
+                    setAllAvailability(docs);
+                });
+                return () => { unsubS(); unsubA(); };
+            }, [user]);
 
-            const loginWithGoogle = async () => {
-                try {
-                    const provider = new GoogleAuthProvider();
-                    await signInWithPopup(auth, provider);
-                } catch (e) {
-                    console.error(e);
+            // Sync with sessionId
+            useEffect(() => {
+                if (!sessionId || globalSessions.length === 0) return;
+                const found = globalSessions.find(s => s.id === sessionId);
+                if (found) {
+                    setSessionData(found);
+                    if (!viewStart) setViewStart(new Date(found.startDate || Date.now()));
+                    const me = allAvailability.find(a => a.sessionId === sessionId && a.uid === user?.uid);
+                    setIsJoined(!!me);
+                    if (me) setUserName(me.name);
                 }
-            };
+            }, [sessionId, globalSessions, allAvailability, user, viewStart]);
 
-            const handleLogout = async () => {
-                if (confirm("ログアウトしますか？")) { await signOut(auth); window.location.reload(); }
-            };
+            const myProjects = useMemo(() => {
+                if (!user) return [];
+                const createdIds = globalSessions.filter(s => s.creatorUid === user.uid).map(s => s.id);
+                const joinedIds = allAvailability.filter(a => a.uid === user.uid).map(a => a.sessionId);
+                const uniqueIds = Array.from(new Set([...createdIds, ...joinedIds]));
+                return uniqueIds.map(id => {
+                    const s = globalSessions.find(s => s.id === id);
+                    if (!s) return null;
+                    return { ...s, isCreator: s.creatorUid === user.uid };
+                }).filter(Boolean);
+            }, [user, globalSessions, allAvailability]);
 
             const handleCreate = async (name, count, start, end) => {
-                if (!user) return;
                 const id = generateId();
-                const data = { 
-                    id, bandName: name, memberCount: parseInt(count), 
-                    startDate: start, endDate: end, createdAt: Date.now(), creatorUid: user.uid 
-                };
+                const data = { id, bandName: name, memberCount: parseInt(count), startDate: start, endDate: end, creatorUid: user.uid, createdAt: Date.now() };
+                setSessionData(data); setViewStart(new Date(start)); setSessionId(id);
                 try {
                     await setDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', id), data);
-                    setSessionId(id);
-                    setViewStart(new Date(start));
-                } catch (e) { setError(`作成失敗`); }
+                    window.history.pushState({}, '', '?s=' + id);
+                } catch (e) { alert("作成失敗"); }
+            };
+
+            const handleDelete = async (id, isCreator) => {
+                try {
+                    if (isCreator) await deleteDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', id));
+                    else await deleteDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', `${id}_${user.uid}`));
+                    if (sessionId === id) setSessionId(null);
+                } catch (e) { alert("失敗しました"); }
             };
 
             const handleJoin = async () => {
-                if (!userName || !userName.trim() || !user || !sessionId) return;
-                setIsJoining(true);
-                try {
-                    const docId = `${sessionId}_${user.uid}`;
-                    const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
-                    const myExistingData = allAvailability.find(a => a.uid === user.uid);
-                    await setDoc(ref, { 
-                        sessionId, uid: user.uid, name: userName.trim(), 
-                        slots: myExistingData?.slots || [], photoURL: user.photoURL || null, lastUpdated: Date.now()
-                    }, { merge: true });
-                    setIsJoined(true);
-                } catch (e) { setError(`参加失敗`); } finally { setIsJoining(false); }
+                if (!userName.trim() || !user || !sessionId) return;
+                const docId = `${sessionId}_${user.uid}`;
+                await setDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId), { 
+                    sessionId, uid: user.uid, name: userName.trim(), slots: [], photoURL: user.photoURL || null, lastUpdated: Date.now() 
+                }, { merge: true });
+                setIsJoined(true);
             };
 
-            const handleSlotClick = async (dateStr, slotIdx) => {
-                if (!isJoined || !user || !sessionId) return;
-                const docId = `${sessionId}_${user.uid}`;
-                const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', docId);
-                const myData = allAvailability.find(a => a.uid === user.uid);
-                const myCurrentSlots = myData?.slots || [];
-                const amISelected = myCurrentSlots.includes(`${dateStr}:${slotIdx}`);
+            const toggleSlot = async (dateStr, slotIdx) => {
+                const ref = doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'availability', `${sessionId}_${user.uid}`);
+                const me = allAvailability.find(a => a.sessionId === sessionId && a.uid === user.uid);
+                const current = me?.slots || [];
+                const target = `${dateStr}:${slotIdx}`;
 
                 if (!selectionStart || selectionStart.dateStr !== dateStr) {
-                    setSelectionStart({ dateStr, slotIdx, wasSelected: amISelected });
+                    setSelectionStart({ dateStr, slotIdx, wasSelected: current.includes(target) });
                 } else {
-                    const start = Math.min(selectionStart.slotIdx, slotIdx);
-                    const end = Math.max(selectionStart.slotIdx, slotIdx);
-                    const rangeKeys = [];
-                    for (let i = start; i <= end; i++) rangeKeys.push(`${dateStr}:${i}`);
-                    const nextSlots = selectionStart.wasSelected ? myCurrentSlots.filter(s => !rangeKeys.includes(s)) : Array.from(new Set([...myCurrentSlots, ...rangeKeys]));
-                    setSelectionStart(null);
-                    await updateDoc(ref, { slots: nextSlots });
+                    const s = Math.min(selectionStart.slotIdx, slotIdx);
+                    const e = Math.max(selectionStart.slotIdx, slotIdx);
+                    const range = []; for (let i = s; i <= e; i++) range.push(`${dateStr}:${i}`);
+                    const next = selectionStart.wasSelected ? current.filter(s => !range.includes(s)) : Array.from(new Set([...current, ...range]));
+                    setSelectionStart(null); await updateDoc(ref, { slots: next });
                 }
             };
-
-            const slotDetails = useMemo(() => {
-                const map = {};
-                allAvailability.forEach(data => {
-                    data.slots?.forEach(slotKey => { if (!map[slotKey]) map[slotKey] = []; map[slotKey].push({ uid: data.uid, name: data.name, photoURL: data.photoURL }); });
-                });
-                return map;
-            }, [allAvailability]);
 
             const matchedRanges = useMemo(() => {
                 if (!sessionData) return [];
                 const results = [];
-                // 古いデータへの対応
-                const start = sessionData.startDate ? new Date(sessionData.startDate) : new Date(sessionData.createdAt);
-                const end = sessionData.endDate ? new Date(sessionData.endDate) : new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000);
-                
-                getDatesInRange(start, end).forEach(date => {
-                    const ds = formatDate(date); let currentRange = null;
-                    for (let sIdx = 0; sIdx < TOTAL_SLOTS; sIdx++) {
-                        if ((slotDetails[`${ds}:${sIdx}`]?.length || 0) >= sessionData.memberCount) {
-                            if (!currentRange) currentRange = { start: sIdx }; currentRange.end = sIdx;
-                        } else if (currentRange) { results.push({ date: new Date(date), ...currentRange }); currentRange = null; }
-                    }
-                    if (currentRange) results.push({ date: new Date(date), ...currentRange });
+                const start = new Date(sessionData.startDate); const end = new Date(sessionData.endDate);
+                const current = new Date(start);
+                const details = {};
+                allAvailability.filter(a => a.sessionId === sessionId).forEach(a => {
+                    a.slots?.forEach(s => { if (!details[s]) details[s] = []; details[s].push(a.uid); });
                 });
+
+                while (current <= end) {
+                    const ds = formatDate(current); let range = null;
+                    for (let i = 0; i < TOTAL_SLOTS; i++) {
+                        if ((details[`${ds}:${i}`]?.length || 0) >= sessionData.memberCount) {
+                            if (!range) range = { start: i }; range.end = i;
+                        } else if (range) { results.push({ date: new Date(current), ...range }); range = null; }
+                    }
+                    if (range) results.push({ date: new Date(current), ...range });
+                    current.setDate(current.getDate() + 1);
+                }
                 return results;
-            }, [sessionData, slotDetails]);
+            }, [sessionData, allAvailability, sessionId]);
 
-            const onSlotPointerDown = (key) => {
-                isLongPressing.current = false;
-                longPressTimer.current = setTimeout(() => { isLongPressing.current = true; setPeekSlot(key); }, 400);
-            };
-            const onSlotPointerUp = (key, ds, sIdx) => {
-                clearTimeout(longPressTimer.current);
-                if (!isLongPressing.current) handleSlotClick(ds, sIdx);
-                setPeekSlot(null); isLongPressing.current = false;
-            };
+            if (isAuthLoading) return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse bg-white">BandSync Loading...</div>;
 
-            if (error) return <ErrorView message={error} onRetry={() => window.location.reload()} />;
-            if (isAuthLoading) return <LoadingView />;
-            if (!user) return <AuthView onGoogle={() => loginWithGoogle()} onAnon={() => signInAnonymously(auth)} />;
-            if (!sessionId) return <CreateView onCreate={handleCreate} user={user} onLogout={handleLogout} />;
-            if (!sessionData || !viewStart) return <LoadingView />;
-            if (!isJoined) return <JoinView bandName={sessionData.bandName} userName={userName} setUserName={setUserName} onJoin={handleJoin} isJoining={isJoining} />;
+            if (!user) return (
+                <div className="min-h-screen bg-indigo-600 flex items-center justify-center p-6 text-white text-center">
+                    <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl">
+                        <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-white italic font-black text-2xl">B</div>
+                        <h1 className="text-3xl font-black mb-1 text-indigo-600 italic tracking-tighter font-sans">BandSync</h1>
+                        <p className="text-[10px] text-slate-400 font-bold mb-10 uppercase tracking-widest font-sans">練習日程をみんなで共有しよう</p>
+                        <div className="space-y-4">
+                            <button onClick={()=>signInWithPopup(auth, new GoogleAuthProvider())} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black flex items-center justify-center hover:bg-indigo-700 shadow-lg"><IconGoogle /> Googleアカウントでログイン</button>
+                            <button onClick={()=>signInAnonymously(auth)} className="w-full py-4 bg-slate-50 text-slate-500 rounded-2xl font-bold hover:bg-slate-100 font-sans">匿名で始める</button>
+                        </div>
+                    </div>
+                </div>
+            );
 
-            const weekDates = getWeekDatesWithinRange(viewStart, sessionData.startDate, sessionData.endDate);
-            const canGoPrev = viewStart > new Date(sessionData.startDate || sessionData.createdAt);
-            const canGoNext = (() => { 
-                const n = new Date(viewStart); 
-                n.setDate(n.getDate()+7); 
-                const endLimit = sessionData.endDate ? new Date(sessionData.endDate) : new Date(new Date(sessionData.startDate || sessionData.createdAt).getTime() + 14 * 24 * 60 * 60 * 1000);
-                return n <= endLimit; 
-            })();
+            if (!sessionId) return (
+                <div className="min-h-screen bg-indigo-600 flex flex-col items-center p-6 text-white overflow-y-auto no-scrollbar font-sans">
+                    <div className="w-full max-w-sm bg-white text-slate-900 p-8 rounded-[2.5rem] shadow-2xl mb-8 shrink-0">
+                        <div className="flex items-center justify-between mb-8 border-b pb-6 text-left font-sans">
+                            <div className="flex items-center gap-3">
+                                {user.photoURL ? <img src={user.photoURL} className="w-10 h-10 rounded-full" /> : <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-black italic">U</div>}
+                                <div><p className="text-[9px] font-bold text-slate-400 uppercase mb-1">{user.isAnonymous ? "GUEST" : "LOGGED IN"}</p><p className="font-black text-sm truncate w-32 text-slate-900 font-sans">{user.displayName || "ゲスト"}</p></div>
+                            </div>
+                            <button onClick={()=>{signOut(auth); window.location.reload();}} className="text-slate-300 hover:text-rose-500"><IconLogout /></button>
+                        </div>
+                        <ProjectForm title="新しいカレンダー" buttonText="調整を開始する" onSubmit={handleCreate} />
+                    </div>
+                    {!user.isAnonymous && myProjects.length > 0 && (
+                        <div className="w-full max-w-sm bg-white/10 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shrink-0 mb-20 font-sans">
+                            <h3 className="text-sm font-black uppercase tracking-widest mb-6 text-center text-indigo-200">履歴・参加中リスト</h3>
+                            <div className="space-y-3">
+                                {myProjects.map(proj => (
+                                    <div key={proj.id} className="relative rounded-2xl bg-white shadow-sm flex items-stretch overflow-hidden">
+                                        <button onClick={() => {window.history.pushState({}, '', '?s='+proj.id); setSessionId(proj.id);}} className="flex-1 p-4 flex flex-col hover:bg-indigo-50/50 text-left font-sans">
+                                            <div className="font-black text-slate-700 truncate text-sm leading-tight font-sans">{proj.bandName}</div>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase ${proj.isCreator ? 'bg-indigo-100 text-indigo-600' : 'bg-emerald-100 text-emerald-600'}`}>{proj.isCreator ? '主催' : '参加'}</span>
+                                                <span className="text-[9px] text-slate-400 font-bold tabular-nums font-sans">{proj.memberCount}人目標</span>
+                                            </div>
+                                        </button>
+                                        <button onClick={()=>setProjectToDelete(proj)} className="px-4 bg-slate-50 text-slate-300 hover:bg-rose-50 hover:text-rose-500 transition-all border-l border-slate-100 flex items-center justify-center shrink-0 font-sans"><IconTrash /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {projectToDelete && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setProjectToDelete(null)}></div>
+                            <div className="bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-8 relative animate-modal text-slate-900 font-sans">
+                                <h2 className="text-xl font-black text-rose-600 mb-4 italic">確認</h2>
+                                <p className="text-sm font-bold text-slate-600 mb-6 leading-relaxed font-sans">{projectToDelete.isCreator ? `「${projectToDelete.bandName}」を完全に削除します。よろしいですか？` : `「${projectToDelete.bandName}」から退出します。よろしいですか？`}</p>
+                                <div className="flex gap-3"><button onClick={()=>setProjectToDelete(null)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-xl font-bold">戻る</button><button onClick={()=>{handleDelete(projectToDelete.id, projectToDelete.isCreator); setProjectToDelete(null);}} className="flex-1 py-4 bg-rose-600 text-white rounded-xl font-black">実行</button></div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+
+            if (!sessionData || !viewStart) return <div className="h-screen flex items-center justify-center font-black text-slate-300 animate-pulse bg-white">Loading...</div>;
+
+            if (!isJoined) return <JoinScreen bandName={sessionData.bandName} userName={userName} setUserName={setUserName} onJoin={handleJoin} />;
+
+            const weekDates = [];
+            const rStart = new Date(sessionData.startDate); rStart.setHours(0,0,0,0);
+            const rEnd = new Date(sessionData.endDate); rEnd.setHours(23,59,59,999);
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(viewStart); d.setDate(viewStart.getDate() + i);
+                if (d >= rStart && d <= rEnd) weekDates.push(d);
+            }
+
+            const slotDetails = {};
+            allAvailability.filter(a => a.sessionId === sessionId).forEach(a => {
+                a.slots?.forEach(s => { if (!slotDetails[s]) slotDetails[s] = []; slotDetails[s].push({ uid: a.uid, name: a.name, photoURL: a.photoURL }); });
+            });
 
             return (
-                <div className="h-screen bg-white flex flex-col font-sans overflow-hidden relative text-slate-900">
-                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-[60] shrink-0 shadow-sm font-sans">
-                        <div className="min-w-0">
-                            <div className="font-black text-lg text-indigo-600 truncate leading-tight font-sans">{sessionData.bandName}</div>
-                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2"><span>目標: {sessionData.memberCount}人</span><span>参加: {allAvailability.length}人</span></div>
+                <div className="h-screen bg-white flex flex-col overflow-hidden relative text-slate-900 font-sans">
+                    <header className="px-4 py-3 border-b flex justify-between items-center bg-white z-[60] shadow-sm font-sans">
+                        <button onClick={() => { window.history.pushState({}, '', window.location.pathname); setSessionId(null); }} className="text-slate-400 p-1 hover:text-indigo-600 font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                        <div className="min-w-0 text-center flex-1 mx-2 font-sans">
+                            <div className="font-black text-lg text-indigo-600 truncate font-sans">{sessionData.bandName}</div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase flex items-center justify-center gap-2 font-sans"><span>目標: {sessionData.memberCount}人</span><span>参加: {allAvailability.filter(a=>a.sessionId===sessionId).length}人</span></div>
                         </div>
-                        <div className="flex gap-1.5 font-sans">
-                            <button onClick={() => setShowMatchModal(true)} className="p-2.5 bg-emerald-50 text-emerald-500 rounded-xl hover:bg-emerald-100 relative font-sans"><IconCircleOK />{matchedRanges.length > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white font-sans">{matchedRanges.length}</div>}</button>
-                            <button onClick={() => setShowStudioModal(true)} className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 font-sans"><IconSuta /></button>
-                            <button onClick={() => { const t = document.createElement('textarea'); t.value = window.location.origin + window.location.pathname + '?s=' + sessionId; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); alert('URLをコピーしました！メンバーに送ってください。'); }} className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 font-sans"><IconCopy /></button>
-                            <button onClick={handleLogout} className="p-2.5 bg-slate-50 text-slate-400 rounded-xl hover:bg-rose-50 hover:text-rose-500 font-sans"><IconLogout /></button>
+                        <div className="flex gap-1">
+                            <button onClick={()=>setShowSettingsModal(true)} className="p-2 bg-slate-50 text-slate-400 rounded-xl font-sans"><IconSettings /></button>
+                            <button onClick={()=>setShowMatchModal(true)} className="p-2 bg-emerald-50 text-emerald-500 rounded-xl relative font-sans"><IconCircleOK />{matchedRanges.length > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white">{matchedRanges.length}</div>}</button>
+                            <button onClick={()=>setShowStudioModal(true)} className="p-2 bg-amber-50 text-amber-600 rounded-xl font-sans"><IconSuta /></button>
+                            <button onClick={()=>{const t=document.createElement('textarea'); t.value=window.location.href; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); alert('URLコピー完了');}} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl font-sans"><IconCopy /></button>
                         </div>
                     </header>
 
                     <div className="flex items-center justify-between px-4 py-2 border-b bg-slate-50 shrink-0 font-sans">
-                        <button disabled={!canGoPrev} onClick={() => { const n = new Date(viewStart); n.setDate(n.getDate()-7); setViewStart(n); }} className={`text-xs font-black p-1 ${!canGoPrev ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>← 前週</button>
-                        <span className="font-black text-sm text-slate-700">{viewStart.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}</span>
-                        <button disabled={!canGoNext} onClick={() => { const n = new Date(viewStart); n.setDate(n.getDate()+7); setViewStart(n); }} className={`text-xs font-black p-1 ${!canGoNext ? 'opacity-20 pointer-events-none' : 'text-slate-400'}`}>次週 →</button>
+                        <button disabled={viewStart <= rStart} onClick={() => { const n = new Date(viewStart); n.setDate(n.getDate()-7); setViewStart(n); }} className="text-xs font-black p-1 text-slate-400 disabled:opacity-20">← 前週</button>
+                        <span className="font-black text-sm text-slate-700 font-sans">{viewStart.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}〜</span>
+                        <button disabled={viewStart >= rEnd} onClick={() => { const n = new Date(viewStart); n.setDate(n.getDate()+7); setViewStart(n); }} className="text-xs font-black p-1 text-slate-400 disabled:opacity-20">次週 →</button>
                     </div>
 
                     <div className="flex-1 flex flex-col overflow-y-auto no-scrollbar pb-10 bg-white font-sans">
-                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm text-center">
-                            <div className="w-12 shrink-0 border-r bg-slate-50 font-sans"></div>
+                        <div className="w-full flex border-b sticky top-0 bg-white z-10 shadow-sm text-center font-sans font-sans">
+                            <div className="w-12 shrink-0 border-r bg-slate-50"></div>
                             {weekDates.map((d, i) => (
-                                <div key={i} className="flex-1 py-2 border-r last:border-r-0 font-sans"><div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div><div className="font-black text-sm text-slate-700">{d.getDate()}</div></div>
+                                <div key={i} className="flex-1 py-2 border-r last:border-r-0 font-sans"><div className={`text-[10px] font-bold ${d.getDay() === 0 ? 'text-rose-500' : d.getDay() === 6 ? 'text-blue-500' : 'text-slate-400'}`}>{DAYS_OF_WEEK[d.getDay()]}</div><div className="font-black text-sm text-slate-700 font-sans">{d.getDate()}</div></div>
                             ))}
-                            {/* 期間外の余白（ヘッダー） */}
-                            {Array.from({ length: 7 - weekDates.length }).map((_, i) => (
-                                <div key={'e-'+i} className="flex-1 out-of-range-column border-r last:border-r-0 font-sans"></div>
-                            ))}
+                            {Array.from({ length: 7 - weekDates.length }).map((_, i) => <div key={i} className="flex-1 out-of-range-column border-r last:border-r-0"></div>)}
                         </div>
-
-                        <div className="flex w-full relative">
-                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black text-center font-sans">{Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100 font-sans">{START_HOUR + h}:00</div>)}</div>
-                            <div className="flex-1 flex font-sans">
+                        <div className="flex w-full relative font-sans font-sans">
+                            <div className="w-12 shrink-0 bg-slate-50/50 border-r text-[9px] text-slate-400 font-black text-center font-sans">{Array.from({ length: END_HOUR - START_HOUR + 1 }).map((_, h) => <div key={h} className="h-12 flex items-start justify-center pt-2 border-b border-slate-100">{START_HOUR + h}:00</div>)}</div>
+                            <div className="flex-1 flex font-sans font-sans font-sans font-sans">
                                 {weekDates.map((d, dayIdx) => {
                                     const ds = formatDate(d);
                                     return (
-                                        <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col relative font-sans">
+                                        <div key={dayIdx} className="flex-1 border-r last:border-r-0 flex flex-col relative font-sans font-sans font-sans font-sans">
                                             {Array.from({ length: TOTAL_SLOTS }).map((_, sIdx) => {
-                                                const key = `${ds}:${sIdx}`; const participants = slotDetails[key] || []; const count = participants.length;
-                                                const isMe = allAvailability.find(a => a.uid === user.uid)?.slots?.includes(key); const isFull = count >= sessionData.memberCount;
-                                                const isPeeking = peekSlot === key; const isSStart = selectionStart && selectionStart.dateStr === ds && selectionStart.slotIdx === sIdx;
+                                                const key = `${ds}:${sIdx}`; const parts = slotDetails[key] || []; const count = parts.length;
+                                                const isMe = allAvailability.find(a => a.sessionId === sessionId && a.uid === user.uid)?.slots?.includes(key); const isFull = count >= sessionData.memberCount;
+                                                const isPeeking = peekSlot === key;
                                                 let cellBg = isFull ? '#ef4444' : count > 0 ? `rgba(67, 56, 202, ${0.25 + (count/sessionData.memberCount * 0.7)})` : 'transparent';
                                                 return (
-                                                    <div key={sIdx} onPointerDown={() => onSlotPointerDown(key)} onPointerUp={() => onSlotPointerUp(key, ds, sIdx)} onPointerLeave={() => setPeekSlot(null)} style={{ backgroundColor: cellBg }} className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition select-none ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''} ${isPeeking ? 'z-50' : ''} ${isSStart ? 'selection-active' : ''}`}>
-                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none font-sans"><div className="w-1 h-1 bg-white rounded-full"></div></div>}
-                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none font-sans ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
-                                                        {isPeeking && participants.length > 0 && (
-                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white/98 backdrop-blur shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none text-left font-sans">
-                                                                {participants.map((p) => (
-                                                                    <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden flex-shrink-0 bg-indigo-100 flex items-center justify-center font-sans font-sans">{p.photoURL ? <img src={p.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-black text-indigo-600 uppercase">{p.name?.charAt(0) || '?'}</span>}</div>
-                                                                ))}
+                                                    <div key={sIdx} onPointerDown={() => { longPressTimer.current = setTimeout(() => setPeekSlot(key), 400); }} onPointerUp={() => { clearTimeout(longPressTimer.current); if (!peekSlot) toggleSlot(ds, sIdx); setPeekSlot(null); }} onPointerLeave={() => { clearTimeout(longPressTimer.current); setPeekSlot(null); }} style={{ backgroundColor: cellBg }} className={`h-6 border-b border-slate-100 cursor-pointer relative slot-transition select-none font-sans font-sans font-sans font-sans font-sans ${isMe ? 'ring-1 ring-inset ring-white/40 shadow-inner' : ''} ${peekSlot === key ? 'z-50' : ''} ${selectionStart?.dateStr === ds && selectionStart?.slotIdx === sIdx ? 'selection-active' : ''}`}>
+                                                        {isMe && <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none font-sans font-sans font-sans font-sans"><div className="w-1 h-1 bg-white rounded-full font-sans font-sans font-sans font-sans font-sans"></div></div>}
+                                                        {count > 0 && <div className={`absolute inset-0 flex items-center justify-center text-[8px] font-black pointer-events-none font-sans font-sans font-sans font-sans ${isFull || count >= sessionData.memberCount/2 ? 'text-white' : 'text-indigo-900/40'}`}>{count}</div>}
+                                                        {peekSlot === key && parts.length > 0 && (
+                                                            <div className="absolute top-1/2 left-full ml-3 -translate-y-1/2 bg-white shadow-2xl rounded-3xl p-3 border border-slate-200 flex flex-wrap max-w-[200px] gap-2 z-[100] animate-pop-in pointer-events-none text-left font-sans font-sans font-sans font-sans font-sans">
+                                                                {parts.map(p => <div key={p.uid} className="w-10 h-10 rounded-2xl border-2 border-white shadow-md overflow-hidden bg-indigo-100 flex items-center justify-center font-sans font-sans font-sans font-sans font-sans">{p.photoURL ? <img src={p.photoURL} className="w-full h-full object-cover" /> : <span className="text-sm font-black text-indigo-600 uppercase font-sans font-sans font-sans font-sans font-sans">{p.name?.charAt(0)}</span>}</div>)}
                                                             </div>
                                                         )}
                                                     </div>
@@ -464,51 +421,60 @@
                                         </div>
                                     );
                                 })}
-                                {/* 期間外の余白（グリッド） */}
-                                {Array.from({ length: 7 - weekDates.length }).map((_, i) => (
-                                    <div key={'eg-'+i} className="flex-1 out-of-range-column border-r last:border-r-0 font-sans"></div>
-                                ))}
+                                {Array.from({ length: 7 - weekDates.length }).map((_, i) => <div key={i} className="flex-1 out-of-range-column border-r last:border-r-0"></div>)}
                             </div>
                         </div>
                     </div>
 
                     {/* Modals */}
+                    {showSettingsModal && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowSettingsModal(false)}></div>
+                            <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal font-sans">
+                                <ProjectForm title="設定の変更" buttonText="保存する" initialData={sessionData} onSubmit={async (name, count, start, end) => {
+                                    await updateDoc(doc(db, 'artifacts', appIdPrefix, 'public', 'data', 'sessions', sessionId), { bandName: name, memberCount: parseInt(count), startDate: start, endDate: end });
+                                    setShowSettingsModal(false);
+                                }} onCancel={() => setShowSettingsModal(false)} />
+                            </div>
+                        </div>
+                    )}
+
                     {showMatchModal && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMatchModal(false)}></div>
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm font-sans" onClick={() => setShowMatchModal(false)}></div>
                             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans">
-                                <div className="flex justify-between items-center mb-6 text-emerald-500 font-sans font-sans"><div className="flex items-center gap-2"><IconCircleOK /><h2 className="text-xl font-black italic tracking-tighter font-sans">全員OKの時間</h2></div><button onClick={() => setShowMatchModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 font-sans">
+                                <div className="flex justify-between items-center mb-6 text-emerald-500 font-sans font-sans font-sans"><div className="flex items-center gap-2"><IconCircleOK /><h2 className="text-xl font-black italic tracking-tighter">全員OKの時間</h2></div><button onClick={() => setShowMatchModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 font-sans font-sans font-sans">
                                     {matchedRanges.length > 0 ? matchedRanges.map((m, idx) => {
                                         const sH = START_HOUR + Math.floor(m.start / 2); const sM = m.start % 2 === 0 ? "00" : "30";
                                         const eH = START_HOUR + Math.floor((m.end + 1) / 2); const eM = (m.end + 1) % 2 === 0 ? "00" : "30";
                                         return (
-                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100 group hover:border-emerald-200 transition-all font-sans font-sans"><div className="font-black text-slate-800 text-sm font-sans font-sans">{`${m.date.getMonth() + 1}/${m.date.getDate()}(${DAYS_OF_WEEK[m.date.getDay()]})`}</div><div className="bg-white px-3 py-1 rounded-full text-xs font-black text-emerald-500 shadow-sm font-sans font-sans">{sH}:{sM} 〜 {eH}:{eM}</div></div>
+                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100 group transition-all font-sans font-sans font-sans"><div className="font-black text-slate-800 text-sm font-sans font-sans font-sans font-sans font-sans">{`${m.date.getMonth() + 1}/${m.date.getDate()}(${DAYS_OF_WEEK[m.date.getDay()]})`}</div><div className="bg-white px-3 py-1 rounded-full text-xs font-black text-emerald-500 shadow-sm font-sans font-sans font-sans font-sans font-sans font-sans">{sH}:{sM} 〜 {eH}:{eM}</div></div>
                                         );
-                                    }) : <div className="py-12 text-center text-slate-300 font-sans font-sans">全員が集まれる時間は<br/>まだありません</div>}
+                                    }) : <div className="py-12 text-center text-slate-300 font-sans font-sans font-sans">集まれる時間はまだありません</div>}
                                 </div>
-                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans">Powered by BandSync</p>
+                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans">Powered by BandSync</p>
                             </div>
                         </div>
                     )}
 
                     {showStudioModal && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 font-sans">
-                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowStudioModal(false)}></div>
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm font-sans font-sans" onClick={() => setShowStudioModal(false)}></div>
                             <div className="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-8 relative animate-modal max-h-[80vh] flex flex-col font-sans">
-                                <div className="flex justify-between items-center mb-6 text-amber-500 font-sans font-sans font-sans"><div className="flex items-center gap-2"><div className="bg-amber-100 px-2 py-1 rounded-lg text-[10px] font-black font-sans font-sans">スタ</div><h2 className="text-xl font-black italic tracking-tighter font-sans">Studio Booking</h2></div><button onClick={() => setShowStudioModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 font-sans font-sans font-sans">
+                                <div className="flex justify-between items-center mb-6 text-amber-500 font-sans font-sans font-sans"><div className="flex items-center gap-2 font-sans font-sans font-sans"><div className="bg-amber-100 px-2 py-1 rounded-lg text-[10px] font-black font-sans font-sans font-sans font-sans">スタ</div><h2 className="text-xl font-black italic tracking-tighter font-sans font-sans font-sans">Studio Booking</h2></div><button onClick={() => setShowStudioModal(false)} className="text-slate-300 hover:text-slate-500 p-2 font-sans font-sans font-sans font-sans"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 font-sans font-sans">
                                     {[
                                         { name: 'ゲートウェイ高田馬場3号店', url: 'http://www.gw-studio.com/studios/studio_baba3rd/index' },
                                         { name: 'バズーカスタジオ高田馬場', url: 'https://bazookastudio.com/' },
                                         { name: 'BASS ON TOP高田馬場', url: 'https://www.bassontop.co.jp/band/takadanobaba/' }
                                     ].map(s => (
-                                        <a key={s.url} href={s.url} target="_blank" className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group font-sans font-sans">
-                                            <div className="text-left font-sans font-sans font-sans"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5 font-sans font-sans font-sans">Takadanobaba</div><div className="font-black text-slate-700 text-sm font-sans font-sans">{s.name}</div></div><div className="text-slate-300 group-hover:text-amber-500 font-sans font-sans font-sans"><IconExternal /></div>
+                                        <a key={s.url} href={s.url} target="_blank" className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-300 hover:bg-amber-50/30 transition-all group font-sans font-sans font-sans">
+                                            <div className="text-left font-sans font-sans font-sans font-sans font-sans font-sans"><div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Takadanobaba</div><div className="font-black text-slate-700 text-sm font-sans font-sans font-sans font-sans font-sans font-sans font-sans">{s.name}</div></div><div className="text-slate-300 group-hover:text-amber-500 font-sans font-sans font-sans font-sans font-sans"><IconExternal /></div>
                                         </a>
                                     ))}
                                 </div>
-                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans font-sans font-sans">Powered by BandSync</p>
+                                <p className="mt-6 text-[10px] text-slate-300 font-bold text-center uppercase tracking-widest font-sans font-sans font-sans">Powered by BandSync</p>
                             </div>
                         </div>
                     )}
