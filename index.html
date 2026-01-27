@@ -40,7 +40,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo } = React;
 
-        // --- SVG Icons (インラインSVGにすることで確実に表示) ---
+        // --- SVG Icons ---
         const Icons = {
             Plus: ({ size = 24, className = "" }) => (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -118,7 +118,6 @@
         const appId = "bandsync-app-v1";
 
         // --- Utils ---
-        // マスの数を調整: 8:00から23:30までの厳密に32スロット（23時のラベルに対して2マスのみ表示）
         const HOURS = Array.from({ length: 32 }, (_, i) => {
             let h = Math.floor(i / 2) + 8;
             const m = i % 2 === 0 ? '00' : '30';
@@ -232,7 +231,6 @@
                     <div className="flex items-center justify-between shrink-0 px-2">
                         <h2 className="text-xl font-black text-slate-800 tracking-tight">マイカレンダー</h2>
                         <div className="flex items-center gap-3">
-                            {/* 全ユーザー(Google/Guest共通)に設定ボタンを表示 */}
                             <button onClick={onSettings} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="基本設定">
                                 <Icons.Key size={22} />
                             </button>
@@ -332,7 +330,8 @@
                         <button onClick={handleSave} className="bg-white text-indigo-600 px-6 py-2.5 rounded-full font-black text-sm shadow-md active:scale-95 transition-all">保存</button>
                     </div>
                     <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shrink-0 mx-1 shadow-sm"><span className="text-sm font-black text-slate-700">カレンダーへの自動反映</span><button onClick={() => setEnabled(!enabled)} className={`w-12 h-6 rounded-full transition-colors relative shadow-inner ${enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-md transition-all ${enabled ? 'left-7' : 'left-1'}`}></div></button></div>
-                    <div className="bg-white rounded-[2.2rem] shadow-xl overflow-hidden flex-1 border border-slate-100 relative mx-1">
+                    {/* 23:30が見切れないよう rounded-none (長方形) に修正 */}
+                    <div className="bg-white rounded-none shadow-xl overflow-hidden flex-1 border border-slate-100 relative mx-1">
                         <div className="overflow-x-auto h-full custom-scrollbar">
                             <div className="w-full grid grid-cols-[45px_repeat(7,1fr)] bg-slate-200 gap-px">
                                 {/* タイムラベル列 */}
@@ -460,7 +459,8 @@
                     </div>
                     {toast && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] bg-slate-800 text-white px-6 py-3 rounded-full font-black text-sm shadow-2xl animate-in fade-in slide-in-from-bottom-4 flex items-center gap-2 border border-slate-700"><Icons.CheckCircle size={16} className="text-green-400"/>{toast}</div>}
                     <div className="flex items-center justify-between bg-white p-1 rounded-2xl shadow-sm border border-slate-100 shrink-0"><button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="p-2 disabled:opacity-20 hover:bg-slate-50 transition-all"><Icons.ChevronLeft size={24}/></button><span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">{page + 1} / {Math.ceil(dates.length / 7)} PAGE</span><button disabled={(page + 1) * 7 >= dates.length} onClick={() => setPage(p => p + 1)} className="p-2 disabled:opacity-20 hover:bg-slate-50 transition-all"><Icons.ChevronRight size={24}/></button></div>
-                    <div className="bg-slate-100 rounded-[2.5rem] shadow-xl overflow-hidden flex-1 border border-slate-100 relative">
+                    {/* 23:30が見切れないよう rounded-none (長方形) に修正 */}
+                    <div className="bg-slate-100 rounded-none shadow-xl overflow-hidden flex-1 border border-slate-100 relative">
                         <div className="grid grid-cols-[50px_repeat(7,1fr)] bg-slate-100 gap-[1px] border-b sticky top-0 z-20 shrink-0"><div className="h-10 flex items-center justify-center text-[8px] font-black text-slate-400 bg-white tracking-widest uppercase">Time</div>{pagedDates.map(d => (<div key={d} className="h-10 flex flex-col items-center justify-center bg-white"><span className="text-[8px] font-black text-indigo-500 uppercase">{WEEKDAYS[getWeekdayIndex(d)]}</span><span className="text-base font-black text-slate-700">{d.split('-')[2]}</span></div>))}</div>
                         <div className="grid grid-cols-[50px_repeat(7,1fr)] bg-slate-100 gap-[1px] overflow-y-auto flex-1 custom-scrollbar"><div className="flex flex-col gap-[1px]">{HOURS.map((h, i) => (<div key={h} className={`h-8 flex items-center justify-center text-[10px] text-slate-300 font-mono font-bold bg-white rounded-[2px] mx-[2px] my-[1px] ${i % 2 === 0 ? '' : 'text-transparent'}`}>{h}</div>))}</div>{pagedDates.map(date => (
                             <div key={date} className="flex flex-col gap-[1px]">{HOURS.map((h, hi) => { 
