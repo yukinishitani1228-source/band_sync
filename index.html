@@ -118,6 +118,7 @@
         const appId = "bandsync-app-v1";
 
         // --- Utils ---
+        // マスの数を調整: 8:00から23:30までの厳密に32スロット（23時のラベルに対して2マスのみ表示）
         const HOURS = Array.from({ length: 32 }, (_, i) => {
             let h = Math.floor(i / 2) + 8;
             const m = i % 2 === 0 ? '00' : '30';
@@ -231,6 +232,7 @@
                     <div className="flex items-center justify-between shrink-0 px-2">
                         <h2 className="text-xl font-black text-slate-800 tracking-tight">マイカレンダー</h2>
                         <div className="flex items-center gap-3">
+                            {/* 全ユーザー(Google/Guest共通)に設定ボタンを表示 */}
                             <button onClick={onSettings} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-600" title="基本設定">
                                 <Icons.Key size={22} />
                             </button>
@@ -332,19 +334,19 @@
                     <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shrink-0 mx-1 shadow-sm"><span className="text-sm font-black text-slate-700">カレンダーへの自動反映</span><button onClick={() => setEnabled(!enabled)} className={`w-12 h-6 rounded-full transition-colors relative shadow-inner ${enabled ? 'bg-indigo-600' : 'bg-slate-200'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-md transition-all ${enabled ? 'left-7' : 'left-1'}`}></div></button></div>
                     <div className="bg-white rounded-[2.2rem] shadow-xl overflow-hidden flex-1 border border-slate-100 relative mx-1">
                         <div className="overflow-x-auto h-full custom-scrollbar">
-                            <div className="w-full grid grid-cols-[40px_repeat(7,1fr)] bg-slate-200 gap-[1px]">
+                            <div className="w-full grid grid-cols-[45px_repeat(7,1fr)] bg-slate-200 gap-px">
                                 {/* タイムラベル列 */}
-                                <div className="flex flex-col gap-[1px]">
+                                <div className="flex flex-col gap-px">
                                     <div className="h-12 bg-white flex items-center justify-center"></div>
                                     {HOURS.map((h, i) => (
-                                        <div key={h} className={`h-8 flex items-center justify-center text-[10px] text-slate-300 font-mono font-bold bg-white ${i % 2 === 0 ? '' : 'text-transparent'}`}>
-                                            {h}
+                                        <div key={h} className="h-8 bg-white flex items-center justify-center">
+                                            <span className={`text-[10px] text-slate-300 font-mono font-bold ${i % 2 === 0 ? '' : 'hidden'}`}>{h}</span>
                                         </div>
                                     ))}
                                 </div>
                                 {/* 曜日列 */}
                                 {WEEKDAYS.map((day, idx) => (
-                                    <div key={idx} className="flex flex-col gap-[1px]">
+                                    <div key={idx} className="flex flex-col gap-px">
                                         <div className="h-12 flex items-center justify-center font-black text-slate-500 bg-white text-[10px]">{day}</div>
                                         {HOURS.map((h, hi) => {
                                             const isActive = (weeklySlots[String(idx)] || []).includes(h);
